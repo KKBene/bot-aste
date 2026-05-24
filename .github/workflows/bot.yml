@@ -1,0 +1,37 @@
+name: Bot Aste — run settimanale
+
+on:
+  schedule:
+    # Venerdì 06:00 UTC ≈ 08:00 ora italiana (07:00 in inverno).
+    # GitHub Actions usa SEMPRE UTC.
+    - cron: "0 6 * * 5"
+  workflow_dispatch: {}   # avvio manuale dal tab "Actions"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installa dipendenze (set leggero per il job)
+        run: pip install -r requirements-job.txt
+
+      - name: Esegui il bot
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PDF_TEXT_PROVIDER: gemini
+          PDF_SCAN_ANALYSIS_MODE: gemini
+          SYNC_TO_SHEETS: "false"   # in cloud i dati vivono su Supabase + dashboard
+        run: python main.py --no-sheet

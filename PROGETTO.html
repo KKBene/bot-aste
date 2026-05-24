@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bot Aste Immobiliari — Documentazione</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #c9d1d9;
+    --muted: #8b949e; --accent: #58a6ff; --green: #3fb950; --yellow: #d29922;
+    --red: #f85149; --code-bg: #1f2428;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text); margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.65; font-size: 16px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1, h2, h3 { line-height: 1.25; font-weight: 600; }
+  h1 { font-size: 2.2em; border-bottom: 1px solid var(--border); padding-bottom: .3em; margin-top: 0; }
+  h2 { font-size: 1.6em; border-bottom: 1px solid var(--border); padding-bottom: .3em; margin-top: 2em; }
+  h3 { font-size: 1.25em; margin-top: 1.6em; color: #e6edf3; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    background: var(--code-bg); padding: .2em .4em; border-radius: 6px;
+    font-family: "SF Mono", Menlo, Consolas, monospace; font-size: .88em; color: #ff7b72;
+  }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; overflow-x: auto;
+  }
+  pre code { background: none; padding: 0; color: var(--text); }
+  table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: .92em; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+  th { background: var(--panel); font-weight: 600; }
+  tr:nth-child(even) { background: rgba(255,255,255,.02); }
+  blockquote {
+    border-left: 4px solid var(--accent); margin: 1em 0; padding: .4em 1em;
+    background: var(--panel); color: var(--muted); border-radius: 0 6px 6px 0;
+  }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: .8em;
+    font-weight: 600; margin-right: 6px; }
+  .b-green { background: rgba(63,185,80,.15); color: var(--green); }
+  .b-blue { background: rgba(88,166,255,.15); color: var(--accent); }
+  .b-yellow { background: rgba(210,153,34,.15); color: var(--yellow); }
+  .b-red { background: rgba(248,81,73,.15); color: var(--red); }
+  .flow { display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch; margin: 1.5em 0; }
+  .step { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; flex: 1; min-width: 130px; }
+  .step .n { color: var(--accent); font-weight: 700; font-size: .85em; }
+  .step .t { font-weight: 600; margin: 4px 0; }
+  .step .d { color: var(--muted); font-size: .82em; }
+  .arrow { align-self: center; color: var(--muted); font-size: 1.4em; }
+  .toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 28px; }
+  .toc ul { margin: 0; padding-left: 18px; }
+  .muted { color: var(--muted); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2.5em 0; }
+  .pill-row { margin: 1em 0; }
+  .file-tree { font-family: "SF Mono", Menlo, monospace; font-size: .85em; color: var(--muted); }
+  .file-tree b { color: #e6edf3; }
+  .kpi { display:flex; gap:14px; flex-wrap:wrap; margin:1.2em 0; }
+  .kpi div { background:var(--panel); border:1px solid var(--border); border-radius:10px;
+    padding:14px 18px; flex:1; min-width:120px; text-align:center; }
+  .kpi .v { font-size:1.6em; font-weight:700; color:var(--green); }
+  .kpi .l { color:var(--muted); font-size:.82em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>🏠 Bot Aste Immobiliari</h1>
+<p class="muted">Scraping automatico di aste giudiziarie italiane, analisi AI delle perizie,
+scoring delle opportunità e digest Telegram settimanale.</p>
+
+<div class="pill-row">
+  <span class="badge b-blue">Playwright</span>
+  <span class="badge b-blue">Supabase</span>
+  <span class="badge b-blue">Gemini AI</span>
+  <span class="badge b-blue">Telegram</span>
+  <span class="badge b-green">100% gratuito</span>
+  <span class="badge b-green">Automazione venerdì</span>
+</div>
+
+<div class="kpi">
+  <div><div class="v">14</div><div class="l">file core</div></div>
+  <div><div class="v">14</div><div class="l">campi estratti/perizia</div></div>
+  <div><div class="v">100</div><div class="l">punti max score</div></div>
+  <div><div class="v">250+</div><div class="l">test automatici</div></div>
+</div>
+
+<div class="toc">
+  <strong>Indice</strong>
+  <ul>
+    <li><a href="#cosa">1. Cosa fa il bot</a></li>
+    <li><a href="#flusso">2. Il flusso in 6 step</a></li>
+    <li><a href="#file">3. Struttura dei file</a></li>
+    <li><a href="#scraper">4. Scraper (Playwright)</a></li>
+    <li><a href="#pdf">5. Analisi PDF perizie (Gemini)</a></li>
+    <li><a href="#scoring">6. Sistema di scoring</a></li>
+    <li><a href="#db">7. Database Supabase</a></li>
+    <li><a href="#telegram">8. Notifiche Telegram</a></li>
+    <li><a href="#config">9. Configurazione</a></li>
+    <li><a href="#run">10. Come si usa</a></li>
+    <li><a href="#test">11. Test</a></li>
+  </ul>
+</div>
+
+<h2 id="cosa">1. Cosa fa il bot</h2>
+<p>
+Il bot cerca automaticamente gli immobili residenziali all'asta su
+<a href="https://www.astalegale.net">astalegale.net</a> nei comuni di interesse
+(zona Varese/Busto Arsizio + opzionale zona montagna), scarica e legge le
+<strong>perizie CTU</strong> in PDF con l'intelligenza artificiale, calcola un
+<strong>punteggio di opportunità 0-100</strong> per ogni immobile e ogni venerdì
+mattina invia su Telegram un <strong>digest con le migliori occasioni</strong>.
+</p>
+<blockquote>
+Obiettivo: individuare in automatico i veri affari (forte sconto sul valore di
+mercato, immobile libero, pochi costi nascosti) senza dover leggere a mano
+decine di perizie da 18 pagine.
+</blockquote>
+
+<h2 id="flusso">2. Il flusso in 6 step</h2>
+<p>L'orchestratore <code>main.py</code> esegue in sequenza:</p>
+<div class="flow">
+  <div class="step"><div class="n">STEP 1</div><div class="t">📡 Scraping</div><div class="d">Raccoglie annunci e dettagli da astalegale.net</div></div>
+  <div class="arrow">→</div>
+  <div class="step"><div class="n">STEP 2</div><div class="t">💾 Salvataggio</div><div class="d">Inserisce i nuovi annunci su Supabase</div></div>
+  <div class="arrow">→</div>
+  <div class="step"><div class="n">STEP 3</div><div class="t">🤖 Analisi PDF</div><div class="d">Gemini legge le perizie ed estrae 14 campi</div></div>
+</div>
+<div class="flow">
+  <div class="step"><div class="n">STEP 4</div><div class="t">📊 Scoring</div><div class="d">Calcola il punteggio 0-100 di ogni immobile</div></div>
+  <div class="arrow">→</div>
+  <div class="step"><div class="n">STEP 5</div><div class="t">📋 Sheets</div><div class="d">Sync opzionale su Google Sheets</div></div>
+  <div class="arrow">→</div>
+  <div class="step"><div class="n">STEP 6</div><div class="t">📱 Telegram</div><div class="d">Digest con le top opportunità</div></div>
+</div>
+
+<h2 id="file">3. Struttura dei file</h2>
+<pre class="file-tree">Scraping/Aste/
+├── <b>config.py</b>            Configurazione centralizzata (chiavi, comuni, soglie)
+├── <b>main.py</b>              Orchestratore dei 6 step
+├── <b>scraper_pw.py</b>        Scraper Playwright async
+├── <b>pdf_analyzer.py</b>      Download + estrazione + analisi AI delle perizie
+├── <b>scorer.py</b>           Formula di scoring 0-100
+├── <b>notifier.py</b>          Digest Telegram (HTML)
+├── <b>database.py</b>          Layer Supabase (CRUD)
+├── <b>sheets.py</b>            Export opzionale su Google Sheets
+├── <b>setup_supabase.sql</b>   Schema del database
+├── <b>setup_scheduler.py</b>   Installazione LaunchAgent (venerdì 8:00)
+├── <b>requirements.txt</b>     Dipendenze Python
+├── tests/                  Suite di test (250+)
+└── _legacy/                Vecchi script Selenium (archiviati)</pre>
+
+<h2 id="scraper">4. Scraper (Playwright)</h2>
+<p>
+<code>scraper_pw.py</code> sostituisce il vecchio Selenium con <strong>Playwright async</strong>:
+headless nativo, più veloce e stabile. Per ogni comune:
+</p>
+<ul>
+  <li>visita la pagina di ricerca e raccoglie i link agli annunci (con paginazione);</li>
+  <li>per ogni annuncio nuovo apre il dettaglio ed estrae in un'unica passata JS:
+      prezzo base, offerta minima, indirizzo, tipologia, data asta, tribunale,
+      procedura, e i link ai documenti (perizia, avviso, ordinanza, planimetrie);</li>
+  <li>filtra automaticamente i codici già presenti nel database.</li>
+</ul>
+<p>Difese anti-blocco: <span class="badge b-yellow">jitter casuale sui delay</span>
+<span class="badge b-yellow">backoff su HTTP 429</span>
+<span class="badge b-yellow">user-agent realistico</span>.</p>
+
+<h2 id="pdf">5. Analisi PDF perizie (Gemini)</h2>
+<p><code>pdf_analyzer.py</code> è il cuore "intelligente" del bot. Pipeline:</p>
+<ol>
+  <li><strong>Download</strong> del PDF: i documenti su <code>documents.astalegale.net</code>
+      richiedono la sessione del browser → si visita prima la pagina dell'asta per
+      ottenere i cookie, poi si scarica.</li>
+  <li><strong>Estrazione testo</strong> con PyMuPDF, <em>ignorando il watermark</em>
+      ripetuto su ogni pagina.</li>
+  <li><strong>Rilevamento scansioni</strong>: se il testo reale è troppo poco
+      (perizia scansionata, solo immagini) si passa alla lettura nativa.</li>
+  <li><strong>Analisi AI</strong>: il testo (o il PDF intero per le scansioni) viene
+      inviato a Gemini che restituisce un JSON strutturato.</li>
+</ol>
+
+<h3>Catena di fallback dei modelli</h3>
+<div class="flow">
+  <div class="step"><div class="t">Gemini Flash</div><div class="d">primario, quota generosa</div></div>
+  <div class="arrow">→</div>
+  <div class="step"><div class="t">Gemini Flash Lite</div><div class="d">backup se il primario è in rate-limit</div></div>
+  <div class="arrow">→</div>
+  <div class="step"><div class="t">Groq (Llama 3.3)</div><div class="d">backup gratuito esterno (opzionale)</div></div>
+</div>
+<blockquote>
+Le perizie <strong>scansionate</strong> (solo immagini) prima davano testo vuoto e
+risultati inutili: ora vengono lette nativamente da <strong>Gemini Vision</strong>,
+recuperando dati che altrimenti andrebbero persi (es. €14.855 di debiti condominiali
+nascosti in una scansione reale).
+</blockquote>
+
+<h3>I 14 campi estratti da ogni perizia</h3>
+<table>
+  <tr><th>Campo</th><th>Descrizione</th><th>Perché conta</th></tr>
+  <tr><td><code>stato_occupazione</code></td><td>LIBERO / OCCUPATO_DEBITORE / _CON_TITOLO / _SENZA_TITOLO</td><td>Rischio di non poter usare l'immobile</td></tr>
+  <tr><td><code>occupazione_opponibile</code></td><td>Il contratto è opponibile all'acquirente?</td><td>Affitto registrato <em>dopo</em> il pignoramento → si libera</td></tr>
+  <tr><td><code>valore_mercato</code></td><td>Stima di mercato del perito (OMV)</td><td>Permette lo sconto <strong>reale</strong>, non solo vs base d'asta</td></tr>
+  <tr><td><code>spese_condominiali_arretrate</code></td><td>Debiti ex art. 568 cpc</td><td>Costo nascosto a carico dell'acquirente</td></tr>
+  <tr><td><code>costi_sanatoria</code></td><td>Costo per sanare difformità</td><td>Spesa aggiuntiva certa</td></tr>
+  <tr><td><code>superficie_mq</code></td><td>Superficie commerciale</td><td>Calcolo €/mq</td></tr>
+  <tr><td><code>stato_manutentivo</code></td><td>OTTIMO → RUDERE</td><td>Costo di ristrutturazione</td></tr>
+  <tr><td><code>quota_proprieta</code></td><td>1/1 piena proprietà, frazionata, nuda...</td><td>Quota parziale = quasi invendibile</td></tr>
+  <tr><td><code>categoria_catastale</code></td><td>A/2, A/3, A/7...</td><td>Tipo e tassazione</td></tr>
+  <tr><td><code>anno_costruzione</code></td><td>Anno dell'edificio</td><td>Vetustà</td></tr>
+  <tr><td><code>classe_energetica</code></td><td>APE A4..G</td><td>Costi energetici</td></tr>
+  <tr><td><code>piano_ascensore</code></td><td>Piano + presenza ascensore</td><td>Accessibilità</td></tr>
+  <tr><td><code>tipologia_immobile</code></td><td>appartamento, villa, bilocale...</td><td>Classificazione</td></tr>
+  <tr><td><code>note_critiche</code></td><td>Problemi gravi (amianto, abusi, inagibilità)</td><td>Red flag</td></tr>
+</table>
+
+<h2 id="scoring">6. Sistema di scoring</h2>
+<p>
+<code>scorer.py</code> assegna un punteggio <strong>0-100</strong> trasparente
+(ogni componente è tracciata in un <code>breakdown</code>):
+</p>
+<table>
+  <tr><th>Componente</th><th>Max</th><th>Logica</th></tr>
+  <tr><td>💰 Sconto reale</td><td>35</td><td>Offerta minima vs <strong>valore di mercato</strong> del perito (40%+ → max)</td></tr>
+  <tr><td>🔑 Occupazione</td><td>25</td><td>Libero 25 · Debitore 15 · Con titolo non opponibile 13 · Senza titolo 4 · Con titolo opponibile 0</td></tr>
+  <tr><td>🔧 Manutenzione</td><td>15</td><td>Ottimo 15 · Buono 11 · Mediocre 6 · Pessimo 2 · Rudere 0</td></tr>
+  <tr><td>💸 Costi nascosti</td><td>10</td><td>Sanatoria + debiti condominiali (azzera al 20% del valore)</td></tr>
+  <tr><td>⚠️ Note critiche</td><td>10</td><td>Nessuna 10 · Lievi 5 · Gravi (amianto, abusi) 0</td></tr>
+  <tr><td>📜 Quota proprietà</td><td>5</td><td>Piena 5 · Frazionata/nuda 0</td></tr>
+</table>
+
+<h3>Esempi reali (Gallarate)</h3>
+<table>
+  <tr><th>Immobile</th><th>Score</th><th>Perché</th></tr>
+  <tr><td>Villa, sconto 34% vs mercato</td><td><span class="badge b-green">70 ⭐ Ottima</span></td><td>Grande sconto reale, ma abuso edilizio da demolire (–10)</td></tr>
+  <tr><td>Appartamento con titolo non opponibile</td><td><span class="badge b-yellow">50 👍 Buona</span></td><td>Sconto modesto, si libera, piccoli debiti</td></tr>
+  <tr><td>Trappola: base = mercato + €14.855 debiti</td><td><span class="badge b-red">26 ⚠️ Bassa</span></td><td>Zero sconto reale, debiti enormi, non conforme</td></tr>
+</table>
+<blockquote>La formula distingue nettamente un vero affare da una trappola che a prima vista
+(prezzo basso) sembrerebbe interessante.</blockquote>
+
+<h2 id="db">7. Database Supabase</h2>
+<p>I dati vivono in PostgreSQL su Supabase. Due tabelle:</p>
+<ul>
+  <li><code>aste</code> — un record per immobile: dati di scraping + 14 campi della perizia
+      + score e breakdown + flag di notifica;</li>
+  <li><code>runs</code> — log di ogni esecuzione (nuovi annunci, PDF analizzati, errori).</li>
+</ul>
+<p>Più due viste comode: <code>v_top_offerte</code> (ordinata per score) e
+<code>v_stats_comune</code> (statistiche per comune). Lo schema completo è in
+<code>setup_supabase.sql</code>.</p>
+
+<h2 id="telegram">8. Notifiche Telegram</h2>
+<p>
+<code>notifier.py</code> compone un digest HTML con le top opportunità sopra soglia.
+Ogni scheda mostra: score ed emoji, comune e indirizzo, prezzo e sconto vs mercato,
+€/mq, stima del perito, tipologia/categoria/anno, stato di occupazione e manutenzione,
+data dell'asta, eventuali <strong>debiti condominiali</strong> e <strong>quota parziale</strong>
+(evidenziati come avvisi), note critiche e link all'annuncio.
+</p>
+
+<h2 id="config">9. Configurazione</h2>
+<p>Tutto è centralizzato in <code>config.py</code>:</p>
+<table>
+  <tr><th>Sezione</th><th>Cosa imposti</th></tr>
+  <tr><td>Supabase</td><td>URL e service-role key</td></tr>
+  <tr><td>Telegram</td><td>Bot token e chat ID</td></tr>
+  <tr><td>Gemini / Groq</td><td>API key e modelli</td></tr>
+  <tr><td>Comuni</td><td>Liste residenziali e montagna</td></tr>
+  <tr><td>Timing</td><td>Delay tra annunci/comuni, timeout</td></tr>
+  <tr><td>Soglie</td><td>Score minimo notifica, top N, limiti PDF</td></tr>
+</table>
+
+<h2 id="run">10. Come si usa</h2>
+<pre><code># Esecuzione completa
+python3 main.py
+
+# Solo scraping (salta PDF e Sheets)
+python3 main.py --no-pdf --no-sheet
+
+# Prova a vuoto (non scrive nulla)
+python3 main.py --dry-run
+
+# Automazione: ogni venerdì alle 8:00 (macOS LaunchAgent)
+python3 setup_scheduler.py --install</code></pre>
+
+<h2 id="test">11. Test</h2>
+<p>Suite con oltre 250 test che validano ogni fase su dati e servizi <strong>reali</strong>:</p>
+<table>
+  <tr><th>Suite</th><th>Cosa verifica</th></tr>
+  <tr><td><code>test_scorer.py</code></td><td>Formula, ordinamenti, edge case, scenari reali</td></tr>
+  <tr><td><code>test_pdf_analyzer.py</code></td><td>Download, estrazione, rilevamento scansioni, analisi Gemini, normalizzazione</td></tr>
+  <tr><td><code>test_scraper.py</code></td><td>Parsing prezzi/URL + integrazione rete reale</td></tr>
+  <tr><td><code>test_database.py</code></td><td>Connessione Supabase, CRUD, query, log run</td></tr>
+  <tr><td><code>test_notifier.py</code></td><td>Escape HTML, formattazione schede, invio digest</td></tr>
+</table>
+<pre><code>python -m pytest tests/ -v</code></pre>
+
+<hr>
+<p class="muted" style="text-align:center; font-size:.85em;">
+Bot Aste Immobiliari · documentazione generata per il progetto in <code>Scraping/Aste/</code>
+</p>
+
+</div>
+</body>
+</html>

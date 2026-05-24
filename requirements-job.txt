@@ -1,0 +1,7 @@
+# Dipendenze MINIME per il job schedulato (GitHub Actions).
+# Lo scraper usa l'API JSON (requests), non serve Playwright/Chromium a runtime:
+# il download PDF funziona via requests; il fallback Playwright è solo locale.
+requests>=2.31.0
+supabase>=2.0.0
+PyMuPDF>=1.23.0
+google-genai>=1.0.0
