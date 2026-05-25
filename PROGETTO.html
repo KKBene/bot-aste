@@ -16,11 +16,11 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     line-height: 1.65; font-size: 16px;
   }
-  .wrap { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 40px 24px 80px; }
   h1, h2, h3 { line-height: 1.25; font-weight: 600; }
   h1 { font-size: 2.2em; border-bottom: 1px solid var(--border); padding-bottom: .3em; margin-top: 0; }
-  h2 { font-size: 1.6em; border-bottom: 1px solid var(--border); padding-bottom: .3em; margin-top: 2em; }
-  h3 { font-size: 1.25em; margin-top: 1.6em; color: #e6edf3; }
+  h2 { font-size: 1.55em; border-bottom: 1px solid var(--border); padding-bottom: .3em; margin-top: 2em; }
+  h3 { font-size: 1.2em; margin-top: 1.6em; color: #e6edf3; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
   code {
@@ -33,7 +33,7 @@
   }
   pre code { background: none; padding: 0; color: var(--text); }
   table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: .92em; }
-  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
   th { background: var(--panel); font-weight: 600; }
   tr:nth-child(even) { background: rgba(255,255,255,.02); }
   blockquote {
@@ -41,7 +41,7 @@
     background: var(--panel); color: var(--muted); border-radius: 0 6px 6px 0;
   }
   .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: .8em;
-    font-weight: 600; margin-right: 6px; }
+    font-weight: 600; margin: 2px 4px 2px 0; }
   .b-green { background: rgba(63,185,80,.15); color: var(--green); }
   .b-blue { background: rgba(88,166,255,.15); color: var(--accent); }
   .b-yellow { background: rgba(210,153,34,.15); color: var(--yellow); }
@@ -54,256 +54,242 @@
   .step .d { color: var(--muted); font-size: .82em; }
   .arrow { align-self: center; color: var(--muted); font-size: 1.4em; }
   .toc { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 28px; }
-  .toc ul { margin: 0; padding-left: 18px; }
+  .toc ul { margin: 0; padding-left: 18px; columns: 2; }
   .muted { color: var(--muted); }
   hr { border: none; border-top: 1px solid var(--border); margin: 2.5em 0; }
-  .pill-row { margin: 1em 0; }
-  .file-tree { font-family: "SF Mono", Menlo, monospace; font-size: .85em; color: var(--muted); }
+  .file-tree { font-family: "SF Mono", Menlo, monospace; font-size: .84em; color: var(--muted); }
   .file-tree b { color: #e6edf3; }
   .kpi { display:flex; gap:14px; flex-wrap:wrap; margin:1.2em 0; }
   .kpi div { background:var(--panel); border:1px solid var(--border); border-radius:10px;
-    padding:14px 18px; flex:1; min-width:120px; text-align:center; }
+    padding:14px 18px; flex:1; min-width:110px; text-align:center; }
   .kpi .v { font-size:1.6em; font-weight:700; color:var(--green); }
-  .kpi .l { color:var(--muted); font-size:.82em; }
+  .kpi .l { color:var(--muted); font-size:.8em; }
+  .live { background:rgba(63,185,80,.12); border:1px solid var(--green); border-radius:10px;
+    padding:14px 18px; margin:1.2em 0; }
 </style>
 </head>
 <body>
 <div class="wrap">
 
 <h1>🏠 Bot Aste Immobiliari</h1>
-<p class="muted">Scraping automatico di aste giudiziarie italiane, analisi AI delle perizie,
-scoring delle opportunità e digest Telegram settimanale.</p>
+<p class="muted">Scraping via API di aste giudiziarie, analisi AI delle perizie, scoring
+economico ROI, tracciamento prezzi e digest Telegram — in cloud, gratis, automatico.</p>
 
-<div class="pill-row">
-  <span class="badge b-blue">Playwright</span>
+<div>
+  <span class="badge b-blue">API JSON astalegale</span>
   <span class="badge b-blue">Supabase</span>
-  <span class="badge b-blue">Gemini AI</span>
+  <span class="badge b-blue">Gemini · Groq · Mistral</span>
+  <span class="badge b-blue">Streamlit</span>
   <span class="badge b-blue">Telegram</span>
-  <span class="badge b-green">100% gratuito</span>
-  <span class="badge b-green">Automazione venerdì</span>
+  <span class="badge b-green">GitHub Actions (cloud)</span>
+  <span class="badge b-green">100% free tier</span>
+</div>
+
+<div class="live">
+  <b>🟢 In produzione</b> — il job gira ogni <b>venerdì ~08:00</b> su GitHub Actions
+  (server cloud, indipendente dal PC). Dashboard su Streamlit Cloud. Dati su Supabase.
 </div>
 
 <div class="kpi">
-  <div><div class="v">14</div><div class="l">file core</div></div>
-  <div><div class="v">14</div><div class="l">campi estratti/perizia</div></div>
-  <div><div class="v">100</div><div class="l">punti max score</div></div>
-  <div><div class="v">250+</div><div class="l">test automatici</div></div>
+  <div><div class="v">~50×</div><div class="l">più veloce (API vs browser)</div></div>
+  <div><div class="v">16+</div><div class="l">campi estratti/perizia</div></div>
+  <div><div class="v">100</div><div class="l">punti max score ROI</div></div>
+  <div><div class="v">~270</div><div class="l">test automatici</div></div>
+  <div><div class="v">€0</div><div class="l">costo mensile</div></div>
 </div>
 
 <div class="toc">
   <strong>Indice</strong>
   <ul>
-    <li><a href="#cosa">1. Cosa fa il bot</a></li>
-    <li><a href="#flusso">2. Il flusso in 6 step</a></li>
-    <li><a href="#file">3. Struttura dei file</a></li>
-    <li><a href="#scraper">4. Scraper (Playwright)</a></li>
-    <li><a href="#pdf">5. Analisi PDF perizie (Gemini)</a></li>
-    <li><a href="#scoring">6. Sistema di scoring</a></li>
-    <li><a href="#db">7. Database Supabase</a></li>
-    <li><a href="#telegram">8. Notifiche Telegram</a></li>
-    <li><a href="#config">9. Configurazione</a></li>
-    <li><a href="#run">10. Come si usa</a></li>
-    <li><a href="#test">11. Test</a></li>
+    <li><a href="#cosa">1. Cosa fa</a></li>
+    <li><a href="#flusso">2. Flusso in 6 step</a></li>
+    <li><a href="#scraper">3. Scraper via API</a></li>
+    <li><a href="#pdf">4. Analisi perizie (router AI)</a></li>
+    <li><a href="#campi">5. I dati estratti</a></li>
+    <li><a href="#scoring">6. Scoring ROI</a></li>
+    <li><a href="#tracking">7. Prezzi & ciclo di vita</a></li>
+    <li><a href="#db">8. Database</a></li>
+    <li><a href="#dashboard">9. Dashboard</a></li>
+    <li><a href="#telegram">10. Telegram</a></li>
+    <li><a href="#deploy">11. Deploy cloud</a></li>
+    <li><a href="#file">12. File & test</a></li>
   </ul>
 </div>
 
-<h2 id="cosa">1. Cosa fa il bot</h2>
+<h2 id="cosa">1. Cosa fa</h2>
 <p>
-Il bot cerca automaticamente gli immobili residenziali all'asta su
-<a href="https://www.astalegale.net">astalegale.net</a> nei comuni di interesse
-(zona Varese/Busto Arsizio + opzionale zona montagna), scarica e legge le
-<strong>perizie CTU</strong> in PDF con l'intelligenza artificiale, calcola un
-<strong>punteggio di opportunità 0-100</strong> per ogni immobile e ogni venerdì
-mattina invia su Telegram un <strong>digest con le migliori occasioni</strong>.
+Cerca automaticamente gli immobili residenziali all'asta su
+<a href="https://www.astalegale.net">astalegale.net</a> nei comuni di interesse,
+legge le <strong>perizie CTU</strong> con l'AI, stima il <strong>margine economico reale</strong>
+(tutti i costi inclusi), assegna un <strong>punteggio 0-100</strong>, traccia i ribassi e i
+venduti, e ogni venerdì manda su Telegram le <strong>migliori opportunità</strong>.
 </p>
 <blockquote>
-Obiettivo: individuare in automatico i veri affari (forte sconto sul valore di
-mercato, immobile libero, pochi costi nascosti) senza dover leggere a mano
-decine di perizie da 18 pagine.
+Obiettivo: distinguere in automatico i <b>veri affari</b> dalle <b>trappole</b> (sconti di
+facciata che, contati ristrutturazione, debiti e imposte, sono in perdita) — senza leggere a
+mano decine di perizie da 18 pagine.
 </blockquote>
 
 <h2 id="flusso">2. Il flusso in 6 step</h2>
 <p>L'orchestratore <code>main.py</code> esegue in sequenza:</p>
 <div class="flow">
-  <div class="step"><div class="n">STEP 1</div><div class="t">📡 Scraping</div><div class="d">Raccoglie annunci e dettagli da astalegale.net</div></div>
+  <div class="step"><div class="n">STEP 1</div><div class="t">📡 Scraping API</div><div class="d">Lotti + prezzi da api.astalegale.net</div></div>
   <div class="arrow">→</div>
-  <div class="step"><div class="n">STEP 2</div><div class="t">💾 Salvataggio</div><div class="d">Inserisce i nuovi annunci su Supabase</div></div>
+  <div class="step"><div class="n">STEP 2</div><div class="t">💾 DB + tracking</div><div class="d">Inserisce nuovi, traccia ribassi, marca venduti</div></div>
   <div class="arrow">→</div>
-  <div class="step"><div class="n">STEP 3</div><div class="t">🤖 Analisi PDF</div><div class="d">Gemini legge le perizie ed estrae 14 campi</div></div>
+  <div class="step"><div class="n">STEP 3</div><div class="t">🤖 Analisi AI</div><div class="d">Router Gemini→Groq→Mistral sulle perizie</div></div>
 </div>
 <div class="flow">
-  <div class="step"><div class="n">STEP 4</div><div class="t">📊 Scoring</div><div class="d">Calcola il punteggio 0-100 di ogni immobile</div></div>
+  <div class="step"><div class="n">STEP 4</div><div class="t">📊 Scoring ROI</div><div class="d">Margine reale risk-adjusted 0-100</div></div>
   <div class="arrow">→</div>
-  <div class="step"><div class="n">STEP 5</div><div class="t">📋 Sheets</div><div class="d">Sync opzionale su Google Sheets</div></div>
+  <div class="step"><div class="n">STEP 5</div><div class="t">📋 Sheets</div><div class="d">Export opzionale (off in cloud)</div></div>
   <div class="arrow">→</div>
   <div class="step"><div class="n">STEP 6</div><div class="t">📱 Telegram</div><div class="d">Digest con le top opportunità</div></div>
 </div>
 
-<h2 id="file">3. Struttura dei file</h2>
-<pre class="file-tree">Scraping/Aste/
-├── <b>config.py</b>            Configurazione centralizzata (chiavi, comuni, soglie)
-├── <b>main.py</b>              Orchestratore dei 6 step
-├── <b>scraper_pw.py</b>        Scraper Playwright async
-├── <b>pdf_analyzer.py</b>      Download + estrazione + analisi AI delle perizie
-├── <b>scorer.py</b>           Formula di scoring 0-100
-├── <b>notifier.py</b>          Digest Telegram (HTML)
-├── <b>database.py</b>          Layer Supabase (CRUD)
-├── <b>sheets.py</b>            Export opzionale su Google Sheets
-├── <b>setup_supabase.sql</b>   Schema del database
-├── <b>setup_scheduler.py</b>   Installazione LaunchAgent (venerdì 8:00)
-├── <b>requirements.txt</b>     Dipendenze Python
-├── tests/                  Suite di test (250+)
-└── _legacy/                Vecchi script Selenium (archiviati)</pre>
-
-<h2 id="scraper">4. Scraper (Playwright)</h2>
+<h2 id="scraper">3. Scraper via API (la svolta)</h2>
 <p>
-<code>scraper_pw.py</code> sostituisce il vecchio Selenium con <strong>Playwright async</strong>:
-headless nativo, più veloce e stabile. Per ogni comune:
+astalegale.net espone un'<strong>API JSON pubblica</strong>. Lo scraper (<code>scraper_api.py</code>)
+non usa più il browser:
 </p>
 <ul>
-  <li>visita la pagina di ricerca e raccoglie i link agli annunci (con paginazione);</li>
-  <li>per ogni annuncio nuovo apre il dettaglio ed estrae in un'unica passata JS:
-      prezzo base, offerta minima, indirizzo, tipologia, data asta, tribunale,
-      procedura, e i link ai documenti (perizia, avviso, ordinanza, planimetrie);</li>
-  <li>filtra automaticamente i codici già presenti nel database.</li>
+  <li><b>Lista lotti</b>: <code>POST api.astalegale.net/Search</code> → tutti i lotti di un comune
+      in JSON (prezzo, offerta minima, data asta, termine offerte, tribunale, coordinate) in ~0,2s.</li>
+  <li><b>Dettaglio</b>: la pagina è server-rendered (Nuxt) → i link perizia/avviso e i campi
+      <code>md-value</code> si leggono dall'HTML con <code>requests</code>.</li>
 </ul>
-<p>Difese anti-blocco: <span class="badge b-yellow">jitter casuale sui delay</span>
-<span class="badge b-yellow">backoff su HTTP 429</span>
-<span class="badge b-yellow">user-agent realistico</span>.</p>
+<p>Risultato: <span class="badge b-green">~50× più veloce</span>
+<span class="badge b-green">niente Chromium</span>
+<span class="badge b-green">gira ovunque, anche su Lambda/Actions</span>.
+Il vecchio scraper Playwright resta solo come fallback.</p>
+<blockquote>Robustezza: il parser dei documenti è ancorato all'icona del file (evita di confondere la
+parola "perizia" nel testo descrittivo) e le entità HTML vengono decodificate.</blockquote>
 
-<h2 id="pdf">5. Analisi PDF perizie (Gemini)</h2>
-<p><code>pdf_analyzer.py</code> è il cuore "intelligente" del bot. Pipeline:</p>
-<ol>
-  <li><strong>Download</strong> del PDF: i documenti su <code>documents.astalegale.net</code>
-      richiedono la sessione del browser → si visita prima la pagina dell'asta per
-      ottenere i cookie, poi si scarica.</li>
-  <li><strong>Estrazione testo</strong> con PyMuPDF, <em>ignorando il watermark</em>
-      ripetuto su ogni pagina.</li>
-  <li><strong>Rilevamento scansioni</strong>: se il testo reale è troppo poco
-      (perizia scansionata, solo immagini) si passa alla lettura nativa.</li>
-  <li><strong>Analisi AI</strong>: il testo (o il PDF intero per le scansioni) viene
-      inviato a Gemini che restituisce un JSON strutturato.</li>
-</ol>
-
-<h3>Catena di fallback dei modelli</h3>
+<h2 id="pdf">4. Analisi perizie — router AI multi-provider</h2>
+<p>
+Le perizie sono il cuore informativo. <code>pdf_analyzer.py</code> instrada per tipo di documento,
+così non dipende dalla quota di un solo provider:
+</p>
 <div class="flow">
-  <div class="step"><div class="t">Gemini Flash</div><div class="d">primario, quota generosa</div></div>
+  <div class="step"><div class="t">Testo estraibile</div><div class="d">Gemini (qualità) → fallback Groq Llama-4</div></div>
   <div class="arrow">→</div>
-  <div class="step"><div class="t">Gemini Flash Lite</div><div class="d">backup se il primario è in rate-limit</div></div>
+  <div class="step"><div class="t">PDF scansionato</div><div class="d">Gemini Vision → overflow Mistral OCR + Groq</div></div>
   <div class="arrow">→</div>
-  <div class="step"><div class="t">Groq (Llama 3.3)</div><div class="d">backup gratuito esterno (opzionale)</div></div>
+  <div class="step"><div class="t">Output</div><div class="d">JSON schema vincolato + hint deterministici</div></div>
 </div>
 <blockquote>
-Le perizie <strong>scansionate</strong> (solo immagini) prima davano testo vuoto e
-risultati inutili: ora vengono lette nativamente da <strong>Gemini Vision</strong>,
-recuperando dati che altrimenti andrebbero persi (es. €14.855 di debiti condominiali
-nascosti in una scansione reale).
+<b>Perché conta:</b> molte perizie sono <b>scansioni</b> (solo immagini) → lette nativamente da
+Gemini Vision / Mistral OCR, recuperando dati che andrebbero persi (es. €14.855 di debiti
+condominiali nascosti). I <b>campi numerici critici</b> (valore di mercato, sanatoria, spese,
+quota) sono imposti da <b>regex deterministiche</b>: a prova di modello.
 </blockquote>
 
-<h3>I 14 campi estratti da ogni perizia</h3>
+<h2 id="campi">5. I dati estratti da ogni perizia</h2>
 <table>
-  <tr><th>Campo</th><th>Descrizione</th><th>Perché conta</th></tr>
-  <tr><td><code>stato_occupazione</code></td><td>LIBERO / OCCUPATO_DEBITORE / _CON_TITOLO / _SENZA_TITOLO</td><td>Rischio di non poter usare l'immobile</td></tr>
-  <tr><td><code>occupazione_opponibile</code></td><td>Il contratto è opponibile all'acquirente?</td><td>Affitto registrato <em>dopo</em> il pignoramento → si libera</td></tr>
-  <tr><td><code>valore_mercato</code></td><td>Stima di mercato del perito (OMV)</td><td>Permette lo sconto <strong>reale</strong>, non solo vs base d'asta</td></tr>
-  <tr><td><code>spese_condominiali_arretrate</code></td><td>Debiti ex art. 568 cpc</td><td>Costo nascosto a carico dell'acquirente</td></tr>
-  <tr><td><code>costi_sanatoria</code></td><td>Costo per sanare difformità</td><td>Spesa aggiuntiva certa</td></tr>
-  <tr><td><code>superficie_mq</code></td><td>Superficie commerciale</td><td>Calcolo €/mq</td></tr>
-  <tr><td><code>stato_manutentivo</code></td><td>OTTIMO → RUDERE</td><td>Costo di ristrutturazione</td></tr>
-  <tr><td><code>quota_proprieta</code></td><td>1/1 piena proprietà, frazionata, nuda...</td><td>Quota parziale = quasi invendibile</td></tr>
-  <tr><td><code>categoria_catastale</code></td><td>A/2, A/3, A/7...</td><td>Tipo e tassazione</td></tr>
-  <tr><td><code>anno_costruzione</code></td><td>Anno dell'edificio</td><td>Vetustà</td></tr>
-  <tr><td><code>classe_energetica</code></td><td>APE A4..G</td><td>Costi energetici</td></tr>
-  <tr><td><code>piano_ascensore</code></td><td>Piano + presenza ascensore</td><td>Accessibilità</td></tr>
-  <tr><td><code>tipologia_immobile</code></td><td>appartamento, villa, bilocale...</td><td>Classificazione</td></tr>
-  <tr><td><code>note_critiche</code></td><td>Problemi gravi (amianto, abusi, inagibilità)</td><td>Red flag</td></tr>
+  <tr><th>Campo</th><th>Perché conta per l'investitore</th></tr>
+  <tr><td><code>valore_mercato</code></td><td>Stima del perito → base per il <b>margine reale</b></td></tr>
+  <tr><td><code>stato_occupazione</code> + <code>opponibile</code></td><td>Rischio: affitto registrato dopo il pignoramento → non opponibile, si libera</td></tr>
+  <tr><td><code>stato_manutentivo</code></td><td>Guida il costo di ristrutturazione (€/mq)</td></tr>
+  <tr><td><code>costi_sanatoria</code></td><td>Spesa per sanare difformità</td></tr>
+  <tr><td><code>spese_condominiali_arretrate</code></td><td>Debito ex art. 568 cpc a carico acquirente</td></tr>
+  <tr><td><code>spese_condominiali_annue</code></td><td>Costo di possesso ricorrente</td></tr>
+  <tr><td><code>spese_straordinarie_deliberate</code></td><td>Costo futuro ereditato</td></tr>
+  <tr><td><code>rendita_catastale</code></td><td>Per stimare l'<b>IMU</b> annua</td></tr>
+  <tr><td><code>canone_locazione_annuo</code></td><td><b>Resa lorda %</b> se messo a reddito</td></tr>
+  <tr><td><code>quota_proprieta</code></td><td>Quota parziale/nuda proprietà → quasi invendibile</td></tr>
+  <tr><td><code>pertinenze</code></td><td>Cantina/box/giardino = valore aggiunto</td></tr>
+  <tr><td><code>qualita_posizione</code> + <code>distanza_stazione_km</code></td><td>Appetibilità e rivendibilità</td></tr>
+  <tr><td><code>categoria_catastale</code>, <code>anno_costruzione</code>, <code>classe_energetica</code>, <code>superficie_mq</code>, <code>piano_ascensore</code></td><td>Caratteristiche e tassazione</td></tr>
+  <tr><td><code>note_critiche</code></td><td>Red flag: amianto, abusi non sanabili, inagibilità</td></tr>
 </table>
 
-<h2 id="scoring">6. Sistema di scoring</h2>
+<h2 id="scoring">6. Scoring ROI risk-adjusted</h2>
 <p>
-<code>scorer.py</code> assegna un punteggio <strong>0-100</strong> trasparente
-(ogni componente è tracciata in un <code>breakdown</code>):
+<code>scorer.py</code> non somma punti astratti: stima il <strong>margine netto reale</strong>
+dell'operazione, poi lo corregge per posizione, rischio e affidabilità.
 </p>
-<table>
-  <tr><th>Componente</th><th>Max</th><th>Logica</th></tr>
-  <tr><td>💰 Sconto reale</td><td>35</td><td>Offerta minima vs <strong>valore di mercato</strong> del perito (40%+ → max)</td></tr>
-  <tr><td>🔑 Occupazione</td><td>25</td><td>Libero 25 · Debitore 15 · Con titolo non opponibile 13 · Senza titolo 4 · Con titolo opponibile 0</td></tr>
-  <tr><td>🔧 Manutenzione</td><td>15</td><td>Ottimo 15 · Buono 11 · Mediocre 6 · Pessimo 2 · Rudere 0</td></tr>
-  <tr><td>💸 Costi nascosti</td><td>10</td><td>Sanatoria + debiti condominiali (azzera al 20% del valore)</td></tr>
-  <tr><td>⚠️ Note critiche</td><td>10</td><td>Nessuna 10 · Lievi 5 · Gravi (amianto, abusi) 0</td></tr>
-  <tr><td>📜 Quota proprietà</td><td>5</td><td>Piena 5 · Frazionata/nuda 0</td></tr>
-</table>
+<pre><code>costo_totale = offerta + ristrutturazione(stato,mq) + imposte registro
+             + debiti condominiali + spese straordinarie + sanatoria
+             + costo liberazione (occupazione)
+             + costi di possesso (condominio annuo + IMU × mesi)
 
-<h3>Esempi reali (Gallarate)</h3>
-<table>
-  <tr><th>Immobile</th><th>Score</th><th>Perché</th></tr>
-  <tr><td>Villa, sconto 34% vs mercato</td><td><span class="badge b-green">70 ⭐ Ottima</span></td><td>Grande sconto reale, ma abuso edilizio da demolire (–10)</td></tr>
-  <tr><td>Appartamento con titolo non opponibile</td><td><span class="badge b-yellow">50 👍 Buona</span></td><td>Sconto modesto, si libera, piccoli debiti</td></tr>
-  <tr><td>Trappola: base = mercato + €14.855 debiti</td><td><span class="badge b-red">26 ⚠️ Bassa</span></td><td>Zero sconto reale, debiti enormi, non conforme</td></tr>
-</table>
-<blockquote>La formula distingue nettamente un vero affare da una trappola che a prima vista
-(prezzo basso) sembrerebbe interessante.</blockquote>
+margine % = (valore_mercato − costo_totale) / valore_mercato
 
-<h2 id="db">7. Database Supabase</h2>
-<p>I dati vivono in PostgreSQL su Supabase. Due tabelle:</p>
+score 0-100 = margine(55) + posizione(20) + liberabilità(15) + affidabilità(10)
+              × moltiplicatore quota × fattore confidenza</code></pre>
+<table>
+  <tr><th>Esempio reale</th><th>Vecchio</th><th>Nuovo ROI</th><th>Perché</th></tr>
+  <tr><td>Villa, sconto 38% vs mercato</td><td>35</td><td><span class="badge b-green">77 🔥</span></td><td>Margine ampio, libera col decreto</td></tr>
+  <tr><td>Appartamento "sconto 49%"</td><td><span class="badge b-yellow">70</span></td><td><span class="badge b-red">23 ⚠️</span></td><td>Con ristrutturazione+costi è in <b>perdita</b></td></tr>
+  <tr><td>Quota 1/3 + amianto + abusi</td><td>—</td><td><span class="badge b-red">31</span></td><td>Moltiplicatore quota 0.45 + note gravi</td></tr>
+</table>
+<blockquote>I parametri economici (€/mq ristrutturazione, imposte 9%/2%, IMU, mesi di possesso)
+sono tutti tunabili in <code>config.py</code>.</blockquote>
+
+<h2 id="tracking">7. Prezzi & ciclo di vita</h2>
+<p>Ad ogni run lo scraper rivisita tutti i lotti:</p>
 <ul>
-  <li><code>aste</code> — un record per immobile: dati di scraping + 14 campi della perizia
-      + score e breakdown + flag di notifica;</li>
-  <li><code>runs</code> — log di ogni esecuzione (nuovi annunci, PDF analizzati, errori).</li>
+  <li><b>Nuovo</b> → inserito; <b>esistente</b> → confronto prezzo;
+      se cala → registrato in <code>prezzi_storico</code> e <code>numero_ribassi</code>++.</li>
+  <li><b>Non più trovato</b> → <code>stato_annuncio</code> = <b>venduto</b> (se l'asta è passata) o
+      <b>sparito</b>; se riappare torna <b>attivo</b>.</li>
+  <li>Le aste <b>scadute</b> (termine offerte passato) non vengono notificate.</li>
 </ul>
-<p>Più due viste comode: <code>v_top_offerte</code> (ordinata per score) e
-<code>v_stats_comune</code> (statistiche per comune). Lo schema completo è in
+
+<h2 id="db">8. Database (Supabase)</h2>
+<p>PostgreSQL su Supabase: tabella <code>aste</code> (dati + 16 campi perizia + score + ciclo vita),
+<code>prezzi_storico</code> (variazioni), <code>runs</code> (log esecuzioni). Schema in
 <code>setup_supabase.sql</code>.</p>
 
-<h2 id="telegram">8. Notifiche Telegram</h2>
-<p>
-<code>notifier.py</code> compone un digest HTML con le top opportunità sopra soglia.
-Ogni scheda mostra: score ed emoji, comune e indirizzo, prezzo e sconto vs mercato,
-€/mq, stima del perito, tipologia/categoria/anno, stato di occupazione e manutenzione,
-data dell'asta, eventuali <strong>debiti condominiali</strong> e <strong>quota parziale</strong>
-(evidenziati come avvisi), note critiche e link all'annuncio.
-</p>
+<h2 id="dashboard">9. Dashboard investitore (Streamlit)</h2>
+<p><code>dashboard.py</code> — 4 tab pensate per decidere:</p>
+<ul>
+  <li><b>🎯 Opportunità</b>: card con <b>verdetto</b> (🔥 Affare / ⚠️ Margine sottile / 🚫 In perdita /
+      ⛔ Rischio legale), margine €/%, ROI, urgenza, export CSV.</li>
+  <li><b>🗺️ Mappa</b>: pin colorati per score (basemap Carto).</li>
+  <li><b>📊 Analisi</b>: distribuzione score, scatter margine%/prezzo, per comune.</li>
+  <li><b>🏠 Dettaglio</b>: <b>waterfall economico</b> (mercato − tutti i costi = margine),
+      storico ribassi, <b>galleria foto</b>, scheda completa, mappa, documenti.</li>
+</ul>
 
-<h2 id="config">9. Configurazione</h2>
-<p>Tutto è centralizzato in <code>config.py</code>:</p>
+<h2 id="telegram">10. Digest Telegram</h2>
+<p>Ogni scheda mostra score, verdetto, prezzo e sconto vs mercato, <b>margine/ROI</b>,
+stima perito, posizione, occupazione, <b>scadenza offerte con urgenza</b>, debiti, quota, note
+critiche, link e mappa. Le offerte scadute o gli immobili venduti non vengono mai notificati.</p>
+
+<h2 id="deploy">11. Deploy in cloud (gratis)</h2>
 <table>
-  <tr><th>Sezione</th><th>Cosa imposti</th></tr>
-  <tr><td>Supabase</td><td>URL e service-role key</td></tr>
-  <tr><td>Telegram</td><td>Bot token e chat ID</td></tr>
-  <tr><td>Gemini / Groq</td><td>API key e modelli</td></tr>
-  <tr><td>Comuni</td><td>Liste residenziali e montagna</td></tr>
-  <tr><td>Timing</td><td>Delay tra annunci/comuni, timeout</td></tr>
-  <tr><td>Soglie</td><td>Score minimo notifica, top N, limiti PDF</td></tr>
+  <tr><th>Componente</th><th>Dove</th><th>Quando</th></tr>
+  <tr><td>Job (scrape→analisi→Telegram)</td><td><b>GitHub Actions</b> (cron)</td><td>venerdì ~08:00, + manuale</td></tr>
+  <tr><td>Dashboard</td><td><b>Streamlit Community Cloud</b></td><td>on-demand</td></tr>
+  <tr><td>Database</td><td><b>Supabase</b></td><td>sempre</td></tr>
 </table>
+<p>Tutto serverless e a costo zero: il PC può stare spento. Secret in GitHub Secrets / Streamlit
+secrets, mai nel codice. Guida completa in <code>DEPLOY.md</code>.</p>
 
-<h2 id="run">10. Come si usa</h2>
-<pre><code># Esecuzione completa
-python3 main.py
-
-# Solo scraping (salta PDF e Sheets)
-python3 main.py --no-pdf --no-sheet
-
-# Prova a vuoto (non scrive nulla)
-python3 main.py --dry-run
-
-# Automazione: ogni venerdì alle 8:00 (macOS LaunchAgent)
-python3 setup_scheduler.py --install</code></pre>
-
-<h2 id="test">11. Test</h2>
-<p>Suite con oltre 250 test che validano ogni fase su dati e servizi <strong>reali</strong>:</p>
-<table>
-  <tr><th>Suite</th><th>Cosa verifica</th></tr>
-  <tr><td><code>test_scorer.py</code></td><td>Formula, ordinamenti, edge case, scenari reali</td></tr>
-  <tr><td><code>test_pdf_analyzer.py</code></td><td>Download, estrazione, rilevamento scansioni, analisi Gemini, normalizzazione</td></tr>
-  <tr><td><code>test_scraper.py</code></td><td>Parsing prezzi/URL + integrazione rete reale</td></tr>
-  <tr><td><code>test_database.py</code></td><td>Connessione Supabase, CRUD, query, log run</td></tr>
-  <tr><td><code>test_notifier.py</code></td><td>Escape HTML, formattazione schede, invio digest</td></tr>
-</table>
-<pre><code>python -m pytest tests/ -v</code></pre>
+<h2 id="file">12. File & test</h2>
+<pre class="file-tree">Aste/
+├── <b>config.py</b>          config + chiavi da .env (parametri economici)
+├── <b>main.py</b>            orchestratore 6 step (flag --comuni, --limit-pdf, --no-*)
+├── <b>scraper_api.py</b>     scraper via API JSON (default)
+├── <b>pdf_analyzer.py</b>    router AI Gemini/Groq/Mistral + OCR + JSON schema
+├── <b>scorer.py</b>          modello economico ROI risk-adjusted
+├── <b>notifier.py</b>        digest Telegram + filtro scadute
+├── <b>database.py</b>        Supabase CRUD + storico prezzi + venduti
+├── <b>dashboard.py</b>       dashboard Streamlit
+├── <b>setup_supabase.sql</b> schema DB
+├── .github/workflows/<b>bot.yml</b>  cron settimanale
+├── <b>requirements-job.txt</b>  deps minime per il job cloud
+├── <b>DEPLOY.md</b>          guida deploy
+└── tests/                ~270 test (scorer, notifier, pdf, scraper_api, database, e2e)</pre>
+<pre><code>python -m pytest tests/ -q        # suite test
+python3 main.py                   # run completo locale
+python3 main.py --comuni uboldo,saronno --limit-pdf 5 --no-telegram   # test mirato
+streamlit run dashboard.py        # dashboard locale</code></pre>
 
 <hr>
 <p class="muted" style="text-align:center; font-size:.85em;">
-Bot Aste Immobiliari · documentazione generata per il progetto in <code>Scraping/Aste/</code>
+Bot Aste Immobiliari · <code>Scraping/Aste/</code> · repo <code>KKBene/bot-aste</code>
 </p>
 
 </div>
