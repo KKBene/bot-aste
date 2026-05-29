@@ -270,8 +270,50 @@ def get_aste_da_notificare(min_score: float, limit: int) -> list:
 
 
 def segna_notificate(codici: list):
+    """
+    Marca le aste come notificate e salva il prezzo al momento della notifica:
+    serve per rilevare se in futuro il prezzo cala in modo significativo
+    (→ get_aste_ribassate_da_notificare per la re-notifica).
+    """
+    c = get_client()
     for codice in codici:
-        get_client().table("aste").update({"notificato": True}).eq("codice", codice).execute()
+        res = c.table("aste").select("prezzo_base").eq("codice", codice).execute()
+        prezzo = (res.data or [{}])[0].get("prezzo_base")
+        c.table("aste").update({
+            "notificato": True,
+            "prezzo_ultima_notifica": prezzo,
+        }).eq("codice", codice).execute()
+
+
+def get_aste_ribassate_da_notificare(soglia_pct: float = 5.0) -> list:
+    """
+    Aste già notificate il cui prezzo_base è calato di almeno `soglia_pct`%
+    rispetto al prezzo registrato al momento dell'ultima notifica.
+    """
+    # filtro lato Python (Supabase non supporta confronti tra colonne nelle query REST)
+    res = (
+        get_client()
+        .table("aste")
+        .select("*")
+        .eq("notificato", True)
+        .eq("stato_annuncio", "attivo")
+        .not_.is_("prezzo_ultima_notifica", "null")
+        .not_.is_("prezzo_base", "null")
+        .execute()
+    )
+    out = []
+    fattore = 1.0 - soglia_pct / 100.0
+    for r in (res.data or []):
+        try:
+            cur = float(r["prezzo_base"])
+            prec = float(r["prezzo_ultima_notifica"])
+        except (TypeError, ValueError):
+            continue
+        if prec > 0 and cur < prec * fattore:
+            r["_ribasso_da"] = prec
+            r["_ribasso_pct"] = round((prec - cur) / prec * 100, 1)
+            out.append(r)
+    return out
 
 
 # ─────────────────────────────────────────────────────────────

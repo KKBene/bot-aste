@@ -356,5 +356,23 @@ class TestDigestFiltraScaduti:
         assert "tra 4gg" in text
 
 
+class TestRibassoBanner:
+    def test_card_mostra_banner_ribasso(self):
+        asta = {"codice": "X", "comune": "uboldo", "score": 70,
+                "indirizzo_immobile": "Via Test 1", "prezzo_base": 60_000,
+                "offerta_minima": 45_000, "_ribasso_da": 80_000, "_ribasso_pct": 25.0}
+        out = _formatta_asta(asta, 1)
+        assert "RIBASSATO" in out
+        assert "25%" in out
+        assert "80,000" in out
+
+    def test_card_senza_ribasso_non_mostra_banner(self):
+        asta = {"codice": "X", "comune": "uboldo", "score": 70,
+                "indirizzo_immobile": "Via Test 1", "prezzo_base": 60_000,
+                "offerta_minima": 45_000}
+        out = _formatta_asta(asta, 1)
+        assert "RIBASSATO" not in out
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

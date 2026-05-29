@@ -49,7 +49,7 @@ SUPABASE_KEY = _env("SUPABASE_KEY")
 # TELEGRAM
 # ────────────────────────────────────────────────
 TELEGRAM_BOT_TOKEN = _env("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = _env("TELEGRAM_CHAT_ID", "1243074559")
+TELEGRAM_CHAT_ID = _env("TELEGRAM_CHAT_ID")   # da .env o Secrets, niente default in repo pubblico
 
 # ────────────────────────────────────────────────
 # GEMINI (analisi PDF — primario)

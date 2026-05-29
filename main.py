@@ -263,7 +263,15 @@ def main():
             print("  ⏭️  Saltato")
         else:
             from notifier import aste_notificabili
+            # Mai notificate + sopra soglia score
             candidate = db.get_aste_da_notificare(SCORE_MINIMO_NOTIFICA, TOP_N_NOTIFICA)
+            # + Aste già notificate ma con ribasso significativo (≥5%)
+            ribassi = db.get_aste_ribassate_da_notificare(soglia_pct=5.0)
+            # Unione (no duplicati) preservando il flag ribasso
+            visti = {a["codice"] for a in candidate}
+            for r in ribassi:
+                if r["codice"] not in visti:
+                    candidate.append(r); visti.add(r["codice"])
             top_aste = aste_notificabili(candidate)   # esclude offerte scadute
             statistiche = {
                 "nuovi_totali": nuovi_count,

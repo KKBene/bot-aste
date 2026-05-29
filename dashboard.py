@@ -111,23 +111,27 @@ def galleria_immagini(codice: str, max_n: int = 10) -> list:
 
 
 def verdetto(r) -> tuple[str, str]:
-    """Verdetto sintetico investitore: (etichetta, classe css)."""
+    """
+    Verdetto investitore allineato allo score 0-100 (no contraddizione con l'emoji).
+    Red flags (rischio legale, quota parziale, margine negativo) hanno priorità.
+    """
     note = (r.get("note_critiche") or "").lower()
     quota = (r.get("quota_proprieta") or "").lower()
     if any(k in note for k in ["non sanabile", "demolire", "inagibile", "amianto", "non conforme"]):
         return "⛔ Rischio legale", "v-loss"
-    if "/2" in quota or "/3" in quota or "nuda" in quota:
+    if "/2" in quota or "/3" in quota or "/4" in quota or "nuda" in quota or "usufrutto" in quota:
         return "⛔ Quota parziale", "v-loss"
     m = r.get("margine_pct")
+    if m is not None and not pd.isna(m) and m < 0:
+        return "🚫 In perdita", "v-loss"
     if m is None or pd.isna(m):
         return "❔ Da analizzare", "v-ok"
-    if m < 0:
-        return "🚫 In perdita", "v-loss"
-    if m < 10:
-        return "⚠️ Margine sottile", "v-thin"
-    if m < 20:
-        return "👍 Interessante", "v-ok"
-    return "🔥 Affare", "v-buy"
+    s = r.get("score") or 0
+    if s >= 75: return "🔥 Affare top",  "v-buy"
+    if s >= 60: return "⭐ Ottima",       "v-ok"
+    if s >= 45: return "👍 Interessante", "v-ok"
+    if s >= 30: return "📌 Marginale",    "v-thin"
+    return "🚫 Da scartare", "v-loss"
 
 
 def euro(v):

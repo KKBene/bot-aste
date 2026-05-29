@@ -159,6 +159,11 @@ def send_error(msg: str) -> bool:
 def _formatta_asta(asta: dict, rank: int) -> str:
     score = asta.get("score") or 0
     emoji = score_emoji(score)
+    # Flag ribasso (se l'asta è qui per re-notifica su calo prezzo)
+    ribasso_banner = ""
+    if asta.get("_ribasso_da") and asta.get("_ribasso_pct"):
+        ribasso_banner = (f"💱 <b>RIBASSATO {asta['_ribasso_pct']:+.0f}%</b> "
+                          f"(prima €{asta['_ribasso_da']:,.0f})\n")
 
     # Prezzo e sconto — vs valore di mercato del perito se disponibile, altrimenti vs base
     prezzo = asta.get("offerta_minima") or asta.get("prezzo_base") or 0
@@ -281,6 +286,7 @@ def _formatta_asta(asta: dict, rank: int) -> str:
         termine_line = f"\n    ⏳ <b>Offerte entro: {termine}</b>{urgenza}"
 
     return (
+        f"{ribasso_banner}"
         f"{emoji} <b>#{rank} — Score {score:.0f}/100</b>\n"
         f"    📍 {comune} — {indirizzo}\n"
         f"    💰 <b>€{prezzo:,.0f}</b>{sconto_str}{mq_str}"
