@@ -321,10 +321,14 @@ def _hints_deterministici(testo: str) -> dict:
             valori = []
             for m in re.finditer(pat, testo, re.IGNORECASE):
                 val = _parse_euro(m.group(1))
-                if val is not None:
+                if val is not None and val > 0:
                     valori.append(val)
             if valori:
-                hints[campo] = valori[-1]
+                # Per il valore_mercato le perizie multi-lotto elencano
+                # più OMV (es. villa €489k + terreno €15k): prendi il MAX,
+                # che corrisponde all'unità principale. Per gli altri costi
+                # (sanatoria, spese) prendi l'ultimo (= valore di riepilogo).
+                hints[campo] = max(valori) if campo == "valore_mercato" else valori[-1]
                 break
 
     # Quota di proprietà frazionata (es. "per la quota di 1/3"): è un fattore di
@@ -909,6 +913,12 @@ class PDFAnalyzer:
                       "spese_straordinarie_deliberate", "rendita_catastale",
                       "canone_locazione_annuo", "distanza_stazione_km"):
             dati[campo] = self._to_float(dati.get(campo))
+
+        # valore_mercato e superficie_mq a 0 = estrazione fallita, non è uno zero
+        # economicamente sensato → normalizza a None (lo scorer userà il fallback).
+        for campo in ("valore_mercato", "superficie_mq"):
+            if dati.get(campo) == 0:
+                dati[campo] = None
 
         # Anno di costruzione: intero plausibile (1800-anno corrente+1)
         anno = self._to_float(dati.get("anno_costruzione"))
