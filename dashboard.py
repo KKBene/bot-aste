@@ -156,6 +156,9 @@ st.sidebar.header("🔎 Filtri")
 
 stati = st.sidebar.multiselect("Stato annuncio", sorted(df["stato_annuncio"].dropna().unique()),
                                default=["attivo"])
+# Tipo località (città / montagna / mare) — flag per filtrare per zona
+cat_disponibili = sorted(df["categoria_localita"].dropna().unique()) if "categoria_localita" in df.columns else []
+cat_loc = st.sidebar.multiselect("📍 Tipo località", cat_disponibili, default=cat_disponibili)
 comuni = st.sidebar.multiselect("Comune", sorted(df["comune"].dropna().unique()))
 score_min = st.sidebar.slider("Score minimo", 0, 100, 0, 5)
 solo_positivo = st.sidebar.checkbox("Solo margine positivo", value=False)
@@ -166,6 +169,8 @@ occ_sel = st.sidebar.multiselect("Occupazione",
 
 f = df.copy()
 if stati:        f = f[f["stato_annuncio"].isin(stati)]
+if cat_loc and "categoria_localita" in f.columns:
+    f = f[f["categoria_localita"].isin(cat_loc)]
 if comuni:       f = f[f["comune"].isin(comuni)]
 f = f[f["score"].fillna(0) >= score_min]
 if solo_positivo: f = f[f["margine_pct"].fillna(-999) > 0]

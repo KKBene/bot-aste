@@ -214,6 +214,7 @@ def run_scraper(
     codici_esistenti: set,
     sheet_type: str = "residenziale",
     traccia_esistenti: bool = True,
+    categoria_localita: Optional[dict] = None,
 ) -> dict:
     """
     Scrapa i comuni via API e restituisce:
@@ -226,9 +227,11 @@ def run_scraper(
     nuovi: list[dict] = []
     esistenti: list[dict] = []
     codici_per_comune: dict[str, set] = {}
+    cat_loc = categoria_localita or {}
 
     for idx, comune in enumerate(comuni, 1):
-        print(f"\n  [{idx}/{len(comuni)}] {comune.upper()}")
+        tag = f" [{cat_loc[comune]}]" if comune in cat_loc else ""
+        print(f"\n  [{idx}/{len(comuni)}] {comune.upper()}{tag}")
         items = cerca_comune(comune, categoria)
         codici_per_comune[comune] = {a["codice"] for a in items}
         n_nuovi = sum(1 for a in items if a["codice"] not in codici_esistenti)
@@ -236,6 +239,7 @@ def run_scraper(
 
         for asta in items:
             asta["sheet_type"] = sheet_type
+            asta["categoria_localita"] = cat_loc.get(comune)
             if asta["codice"] not in codici_esistenti:
                 arricchisci_dettaglio(asta)
                 prezzo = f"€{asta['prezzo_base']:,.0f}" if asta.get("prezzo_base") else "N/D"

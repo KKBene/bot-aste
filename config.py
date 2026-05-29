@@ -94,26 +94,69 @@ GOOGLE_CREDENTIALS_FILE = str(BASE_DIR / "credentials.json")
 SYNC_TO_SHEETS = _env_bool("SYNC_TO_SHEETS", True)
 
 # ────────────────────────────────────────────────
-# COMUNI DA SCRAPARE
+# COMUNI DA SCRAPARE — organizzati per TIPO DI LOCALITÀ
+# Ogni comune appartiene a una sola categoria (citta | montagna | mare).
+# Per attivare/disattivare un'intera categoria usa SCRAPA_LOCALITA sotto.
 # ────────────────────────────────────────────────
-COMUNI_RESIDENZIALI = [
-    "tradate", "saronno", "uboldo", "caronno-pertusella", "cislago",
-    "mozzate", "gallarate", "rovello-porro", "venegono-inferiore",
-    "venegono-superiore", "castellanza", "busto-arsizio", "carbonate",
-    "locate-varesino", "gerenzano", "turate", "rovellasca",
-]
+COMUNI_PER_LOCALITA = {
+    # Città / hinterland Varese-Como-Milano (zona di interesse principale)
+    "citta": [
+        "tradate", "saronno", "uboldo", "caronno-pertusella", "cislago",
+        "mozzate", "gallarate", "rovello-porro", "venegono-inferiore",
+        "venegono-superiore", "castellanza", "busto-arsizio", "carbonate",
+        "locate-varesino", "gerenzano", "turate", "rovellasca",
+    ],
 
-COMUNI_MONTAGNA = [
-    "bormio", "valdidentro", "valdisotto", "sondalo", "livigno",
-    "madesimo", "campodolcino", "chiavenna", "prata-camportaccio",
-    "aprica", "corteno-golgi", "teglio", "ponte-di-legno", "temu",
-    "vezza-d-oglio", "edolo", "chiesa-in-valmalenco", "lanzada",
-    "caspoggio", "foppolo", "branzi", "barzio", "pasturo",
-    "introbio", "castione-della-presolana", "clusone",
-]
+    # Montagna — Alpi, principali località sciistiche
+    "montagna": [
+        # Lombardia
+        "bormio", "valdidentro", "valdisotto", "livigno", "madesimo",
+        "campodolcino", "aprica", "ponte-di-legno", "temu", "vezza-d-oglio",
+        "edolo", "chiesa-in-valmalenco", "foppolo", "castione-della-presolana",
+        # Valle d'Aosta
+        "courmayeur", "la-thuile", "valtournenche", "ayas", "champoluc", "cogne",
+        "gressoney-la-trinite", "gressoney-saint-jean", "pila",
+        # Piemonte (Vialattea + Limone)
+        "sestriere", "sauze-d-oulx", "bardonecchia", "pragelato", "claviere",
+        "limone-piemonte", "prato-nevoso", "alagna-valsesia", "macugnaga",
+        # Trentino
+        "madonna-di-campiglio", "pinzolo", "canazei", "moena", "predazzo",
+        "san-martino-di-castrozza", "andalo", "fai-della-paganella", "folgaria",
+        # Alto Adige
+        "selva-di-val-gardena", "ortisei", "santa-cristina-valgardena",
+        "corvara-in-badia", "badia", "plan-de-corones",
+        # Veneto / Friuli
+        "cortina-d-ampezzo", "arabba", "falcade", "tarvisio", "sappada",
+    ],
 
+    # Mare — Liguria di Ponente e Levante
+    "mare": [
+        # Ponente
+        "ventimiglia", "bordighera", "sanremo", "ospedaletti", "imperia",
+        "diano-marina", "alassio", "laigueglia", "albenga", "loano",
+        "pietra-ligure", "finale-ligure", "noli", "spotorno", "varazze", "savona",
+        # Levante
+        "genova", "camogli", "santa-margherita-ligure", "portofino", "rapallo",
+        "zoagli", "chiavari", "lavagna", "sestri-levante", "moneglia",
+        "levanto", "monterosso-al-mare", "vernazza", "riomaggiore",
+        "la-spezia", "lerici", "portovenere",
+    ],
+}
+
+# Quali categorie includere nel run (toggle indipendenti)
+SCRAPA_LOCALITA = {
+    "citta": _env_bool("SCRAPA_CITTA", True),
+    "montagna": _env_bool("SCRAPA_MONTAGNA", True),
+    "mare": _env_bool("SCRAPA_MARE", True),
+}
+
+# Tipo immobile cercato sull'API astalegale (NON cambiare salvo bisogni reali)
 CATEGORIA_RESIDENZIALE = "residenziali"
-SCRAPA_MONTAGNA = False  # Imposta True per includere anche i comuni montagna
+
+# Alias retro-compatibili (codice/test legacy)
+COMUNI_RESIDENZIALI = COMUNI_PER_LOCALITA["citta"]
+COMUNI_MONTAGNA = COMUNI_PER_LOCALITA["montagna"]
+SCRAPA_MONTAGNA = SCRAPA_LOCALITA["montagna"]
 
 # ────────────────────────────────────────────────
 # TIMING SCRAPER

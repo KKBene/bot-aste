@@ -54,6 +54,7 @@ def inserisci_asta(asta: dict) -> bool:
         "posizione_lng": asta.get("posizione_lng"),
         "immagine_url": asta.get("immagine_url"),
         "sheet_type": asta.get("sheet_type", "residenziale"),
+        "categoria_localita": asta.get("categoria_localita"),
         "scraping_date": datetime.now().isoformat(),
         "stato_annuncio": "attivo",
         "prima_vista": datetime.now().isoformat(),

@@ -20,8 +20,8 @@ import traceback
 from datetime import datetime
 
 from config import (
-    COMUNI_RESIDENZIALI, COMUNI_MONTAGNA,
-    CATEGORIA_RESIDENZIALE, SCRAPA_MONTAGNA,
+    COMUNI_PER_LOCALITA, SCRAPA_LOCALITA,
+    CATEGORIA_RESIDENZIALE,
     GEMINI_API_KEY, GEMINI_MODEL,
     SCORE_MINIMO_NOTIFICA, TOP_N_NOTIFICA,
     SYNC_TO_SHEETS,
@@ -93,17 +93,26 @@ def main():
         attive = db.get_aste_attive() if not DRY_RUN else {}
         print(f"  Annunci nel DB: {len(codici_esistenti)} (attivi: {len(attive)})")
 
+        # mappa {comune: categoria_localita} ricostruita dalla config
+        comune_to_cat = {com: cat for cat, lista in COMUNI_PER_LOCALITA.items() for com in lista}
+
         if COMUNI_OVERRIDE:
             comuni = [c.strip() for c in COMUNI_OVERRIDE.split(",") if c.strip()]
             print(f"  ⚙️  Comuni override: {comuni}")
         else:
-            comuni = list(COMUNI_RESIDENZIALI)
-            if SCRAPA_MONTAGNA:
-                comuni += list(COMUNI_MONTAGNA)
+            categorie_attive = [cat for cat, on in SCRAPA_LOCALITA.items() if on]
+            comuni = [c for cat in categorie_attive for c in COMUNI_PER_LOCALITA[cat]]
+            riassunto = ", ".join(
+                f"{cat}={len(COMUNI_PER_LOCALITA[cat])}" for cat in categorie_attive
+            )
+            print(f"  📍 Categorie attive: {riassunto} (totale {len(comuni)} comuni)")
 
         # scraper_api.run_scraper è sincrono (requests); supporta anche
         # eventuali implementazioni async (es. scraper_pw) come fallback.
-        risultato = run_scraper(comuni, CATEGORIA_RESIDENZIALE, codici_esistenti)
+        risultato = run_scraper(
+            comuni, CATEGORIA_RESIDENZIALE, codici_esistenti,
+            categoria_localita={c: comune_to_cat.get(c, "citta") for c in comuni},
+        )
         if asyncio.iscoroutine(risultato):
             risultato = asyncio.run(risultato)
         nuovi_annunci = risultato["nuovi"]
