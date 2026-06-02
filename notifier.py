@@ -349,9 +349,39 @@ def send_digest(top_aste: list, statistiche: dict) -> bool:
         "━━━━━━━━━━━━━━━━━━━━━━━\n\n"
     )
 
-    cards = []
-    for i, asta in enumerate(top_aste, 1):
-        cards.append(_formatta_asta(asta, i))
+    # Raggruppa per tipo di località: se sono presenti più categorie il digest
+    # viene reso in sezioni (altrimenti le città monopolizzano i top score).
+    SEZIONI_ORDINE = [
+        ("citta",    "🏙️ <b>CITTÀ</b>"),
+        ("montagna", "🏔️ <b>MONTAGNA</b>"),
+        ("mare",     "🌊 <b>MARE</b>"),
+    ]
+    per_cat = {k: [] for k, _ in SEZIONI_ORDINE}
+    altre = []
+    for a in top_aste:
+        c = a.get("categoria_localita")
+        (per_cat[c] if c in per_cat else altre).append(a)
+
+    categorie_attive = [(k, t) for k, t in SEZIONI_ORDINE if per_cat[k]]
+    if len(categorie_attive) <= 1 and not altre:
+        # tutte di un'unica categoria → render piatto (no overhead di sezioni)
+        cards = [_formatta_asta(a, i) for i, a in enumerate(top_aste, 1)]
+        body = "\n\n".join(cards)
+    else:
+        blocchi = []
+        rank = 1
+        for k, titolo in categorie_attive:
+            lista = per_cat[k]
+            blocchi.append(f"{titolo} — top {len(lista)}\n")
+            for a in lista:
+                blocchi.append(_formatta_asta(a, rank))
+                rank += 1
+        if altre:
+            blocchi.append("📍 <b>ALTRE</b>\n")
+            for a in altre:
+                blocchi.append(_formatta_asta(a, rank))
+                rank += 1
+        body = "\n\n".join(blocchi)
 
     sheet_url = f"https://docs.google.com/spreadsheets/d/{GOOGLE_SHEET_ID}"
     footer = (
@@ -359,5 +389,5 @@ def send_digest(top_aste: list, statistiche: dict) -> bool:
         f'📊 <a href="{sheet_url}">Apri Google Sheet completo</a>'
     )
 
-    full_msg = header + "\n\n".join(cards) + footer
+    full_msg = header + body + footer
     return _split_and_send(full_msg)

@@ -19,7 +19,7 @@ import pytest
 import time
 from unittest.mock import patch, MagicMock
 
-from scraper_pw import run_scraper
+from scraper_api import run_scraper
 from scorer import calcola_score, score_label
 from notifier import _formatta_asta, send_digest
 
@@ -37,9 +37,8 @@ class TestE2EScrapeScore:
     def annunci_reali(self):
         """Scrapa 2 comuni e restituisce i risultati (nuovi + esistenti)."""
         comuni = ["uboldo", "mozzate"]  # piccoli → veloci
-        risultato = asyncio.run(
-            run_scraper(comuni, "residenziali", codici_esistenti=set())
-        )
+        # scraper_api.run_scraper è sincrono (no asyncio)
+        risultato = run_scraper(comuni, "residenziali", codici_esistenti=set())
         risultati = risultato["nuovi"] + risultato["esistenti"]
         print(f"\n  E2E: trovati {len(risultati)} annunci da {comuni}")
         return risultati

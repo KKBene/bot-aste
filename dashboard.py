@@ -166,10 +166,34 @@ cat_loc = st.sidebar.multiselect("📍 Tipo località", cat_disponibili, default
 comuni = st.sidebar.multiselect("Comune", sorted(df["comune"].dropna().unique()))
 score_min = st.sidebar.slider("Score minimo", 0, 100, 0, 5)
 solo_positivo = st.sidebar.checkbox("Solo margine positivo", value=False)
+solo_analizzate = st.sidebar.checkbox("Solo con perizia analizzata", value=False)
 escludi_scaduti = st.sidebar.checkbox("Escludi offerte scadute", value=True)
-budget = st.sidebar.number_input("Budget massimo (offerta minima €)", 0, 2_000_000, 0, 10_000)
+
+# Range prezzo (offerta minima) dinamico sui dati
+_prezzi = pd.to_numeric(df["offerta_minima"], errors="coerce").dropna()
+if len(_prezzi):
+    p_min, p_max = int(_prezzi.min()), int(_prezzi.max())
+    prezzo_range = st.sidebar.slider("Prezzo offerta minima (€)",
+                                     p_min, p_max, (p_min, p_max), step=5_000)
+else:
+    prezzo_range = (0, 10**9)
+
+# Range superficie mq
+_mq = pd.to_numeric(df["superficie_mq"], errors="coerce").dropna()
+if len(_mq):
+    mq_min, mq_max = int(_mq.min()), int(_mq.max())
+    mq_range = st.sidebar.slider("Superficie (mq)",
+                                 mq_min, mq_max, (mq_min, mq_max), step=10)
+else:
+    mq_range = None
+
 occ_sel = st.sidebar.multiselect("Occupazione",
                                  sorted(df["stato_occupazione"].dropna().unique()))
+
+ordina_per = st.sidebar.selectbox("Ordina per",
+                                  ["Score (alto→basso)", "Margine € (alto→basso)",
+                                   "Margine % (alto→basso)", "Prezzo (basso→alto)",
+                                   "Termine offerte (urgenza)"])
 
 f = df.copy()
 if stati:        f = f[f["stato_annuncio"].isin(stati)]
@@ -179,9 +203,25 @@ if comuni:       f = f[f["comune"].isin(comuni)]
 f = f[f["score"].fillna(0) >= score_min]
 if solo_positivo: f = f[f["margine_pct"].fillna(-999) > 0]
 if escludi_scaduti: f = f[~f["scaduto"]]
-if budget > 0:   f = f[f["offerta_minima"].fillna(0) <= budget]
+if solo_analizzate: f = f[f["analisi_pdf"] == True]
+# range prezzo: include i null solo se il min è 0 (no filtro stringente)
+_p = pd.to_numeric(f["offerta_minima"], errors="coerce")
+f = f[(_p.between(*prezzo_range)) | (_p.isna() & (prezzo_range[0] == 0))]
+if mq_range:
+    _m = pd.to_numeric(f["superficie_mq"], errors="coerce")
+    f = f[(_m.between(*mq_range)) | _m.isna()]
 if occ_sel:      f = f[f["stato_occupazione"].isin(occ_sel)]
-f = f.sort_values("score", ascending=False, na_position="last")
+
+# Ordinamento scelto dall'utente
+_sort_map = {
+    "Score (alto→basso)":      ("score",        False),
+    "Margine € (alto→basso)":  ("margine_eur",  False),
+    "Margine % (alto→basso)":  ("margine_pct",  False),
+    "Prezzo (basso→alto)":     ("offerta_minima", True),
+    "Termine offerte (urgenza)": ("giorni_termine", True),
+}
+_col, _asc = _sort_map.get(ordina_per, ("score", False))
+f = f.sort_values(_col, ascending=_asc, na_position="last")
 
 # ─────────────────────────────────────────────────────────────
 # KPI
