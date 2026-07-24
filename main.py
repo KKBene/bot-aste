@@ -16,8 +16,10 @@ Esegui solo scraping: python3 main.py --no-pdf --no-sheet
 import asyncio
 import json
 import sys
+import tempfile
 import traceback
 from datetime import datetime
+from pathlib import Path
 
 from config import (
     COMUNI_PER_LOCALITA, SCRAPA_LOCALITA,
@@ -30,7 +32,8 @@ import database as db
 from scraper_api import run_scraper   # API JSON: molto più veloce di Playwright
 from pdf_analyzer import PDFAnalyzer
 from scorer import calcola_score
-from notifier import send_start, send_digest, send_error
+from notifier import send_start, send_digest, send_error, send_document, send_message, aste_notificabili
+from pdf_report import genera_report_lombardia, genera_report_vacanza, prepara_novita
 
 # Flag da riga di comando
 SKIP_PDF = "--no-pdf" in sys.argv
@@ -255,33 +258,82 @@ def main():
                 errori_count += 1
 
         # ─────────────────────────────────────────────────────
-        # STEP 6: Digest Telegram
+        # STEP 6: Report PDF settimanale (Lombardia + Vacanza) via Telegram
         # ─────────────────────────────────────────────────────
-        step("📱 STEP 6 — Invio digest Telegram")
+        step("📱 STEP 6 — Report PDF settimanale")
 
         if SKIP_TELEGRAM or DRY_RUN:
             print("  ⏭️  Saltato")
         else:
-            from notifier import aste_notificabili
-            # Mai notificate + sopra soglia score
-            candidate = db.get_aste_da_notificare(SCORE_MINIMO_NOTIFICA, TOP_N_NOTIFICA)
-            # + Aste già notificate ma con ribasso significativo (≥5%)
-            ribassi = db.get_aste_ribassate_da_notificare(soglia_pct=5.0)
-            # Unione (no duplicati) preservando il flag ribasso
-            visti = {a["codice"] for a in candidate}
-            for r in ribassi:
-                if r["codice"] not in visti:
-                    candidate.append(r); visti.add(r["codice"])
-            top_aste = aste_notificabili(candidate)   # esclude offerte scadute
-            statistiche = {
-                "nuovi_totali": nuovi_count,
-                "pdf_analizzati": pdf_count,
-            }
-            send_digest(top_aste, statistiche)
+            try:
+                # Novità della settimana: mai notificate + sopra soglia score
+                # (nessun cap: lo snapshot PDF non ha i limiti di lunghezza di
+                # un messaggio Telegram, quindi mostriamo tutte le novità).
+                candidate = db.get_aste_da_notificare(SCORE_MINIMO_NOTIFICA, 500)
+                # + Aste già notificate ma con ribasso significativo (≥5%)
+                ribassi = db.get_aste_ribassate_da_notificare(soglia_pct=5.0)
 
-            if top_aste:
-                db.segna_notificate([a["codice"] for a in top_aste])
-                print(f"  ✅ Notificate {len(top_aste)} offerte")
+                visti = {a["codice"] for a in candidate}
+                da_marcare = list(candidate)
+                for r in ribassi:
+                    if r["codice"] not in visti:
+                        da_marcare.append(r); visti.add(r["codice"])
+                da_marcare = aste_notificabili(da_marcare)   # esclude offerte scadute
+                codici_da_marcare = {a["codice"] for a in da_marcare}
+
+                nuovi_set = {a["codice"] for a in candidate} & codici_da_marcare
+                ribassi_giocabili = [r for r in ribassi
+                                      if r["codice"] in codici_da_marcare and r["codice"] not in nuovi_set]
+                novita = prepara_novita(nuovi_set, ribassi_giocabili)
+
+                # Snapshot completo: tutte le aste attive sopra soglia, non scadute
+                snapshot = [a for a in db.get_aste_attive_complete()
+                            if (a.get("score") or 0) >= SCORE_MINIMO_NOTIFICA]
+                snapshot = aste_notificabili(snapshot)
+
+                per_cat = {"citta": [], "montagna": [], "mare": []}
+                for a in snapshot:
+                    per_cat.get(a.get("categoria_localita") or "citta", per_cat["citta"]).append(a)
+
+                nuovi_settimana = len(nuovi_set)
+                ribassi_settimana = len(ribassi_giocabili)
+
+                with tempfile.TemporaryDirectory() as tmp:
+                    tmp_path = Path(tmp)
+                    pdf_lom = genera_report_lombardia(
+                        per_cat["citta"], novita, tmp_path, nuovi_settimana, ribassi_settimana)
+                    pdf_vac = genera_report_vacanza(
+                        per_cat["montagna"], per_cat["mare"], novita, tmp_path,
+                        nuovi_settimana, ribassi_settimana)
+
+                    send_message(
+                        f"Report Aste — {datetime.now().strftime('%d/%m/%Y')}\n"
+                        f"{nuovi_settimana} nuovi annunci, {ribassi_settimana} ribassati questa settimana.\n"
+                        f"Due PDF in arrivo: Lombardia e Vacanza."
+                    )
+                    send_document(pdf_lom, caption=f"Casa — Lombardia ({len(per_cat['citta'])} opportunità)")
+                    send_document(pdf_vac, caption=(
+                        f"Vacanza — Montagna & Mare "
+                        f"({len(per_cat['montagna']) + len(per_cat['mare'])} opportunità)"))
+
+                if da_marcare:
+                    db.segna_notificate([a["codice"] for a in da_marcare])
+                    print(f"  ✅ Notificate {len(da_marcare)} offerte (report PDF)")
+
+            except Exception as e:
+                print(f"  ❌ Errore report PDF: {e} — fallback al digest testuale")
+                traceback.print_exc()
+                candidate = db.get_aste_da_notificare(SCORE_MINIMO_NOTIFICA, TOP_N_NOTIFICA)
+                ribassi = db.get_aste_ribassate_da_notificare(soglia_pct=5.0)
+                visti = {a["codice"] for a in candidate}
+                for r in ribassi:
+                    if r["codice"] not in visti:
+                        candidate.append(r); visti.add(r["codice"])
+                top_aste = aste_notificabili(candidate)
+                send_digest(top_aste, {"nuovi_totali": nuovi_count, "pdf_analizzati": pdf_count})
+                if top_aste:
+                    db.segna_notificate([a["codice"] for a in top_aste])
+                    print(f"  ✅ Notificate {len(top_aste)} offerte (fallback testuale)")
 
         # ─────────────────────────────────────────────────────
         # FINE

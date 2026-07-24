@@ -12,6 +12,9 @@ supabase>=2.0.0
 PyMuPDF>=1.23.0
 google-genai>=1.0.0
 
+# PDF Report (digest settimanale)
+reportlab>=4.0.0
+
 # Google Sheets (sync opzionale)
 gspread>=6.0.0
 oauth2client>=4.1.3

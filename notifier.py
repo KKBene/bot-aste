@@ -83,6 +83,31 @@ def _escape_html(text: str) -> str:
     return text
 
 
+def send_document(file_path, caption: str = "") -> bool:
+    """Invia un file (es. PDF) come documento Telegram. Ritorna True se riuscito."""
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendDocument"
+    try:
+        with open(file_path, "rb") as f:
+            resp = requests.post(
+                url,
+                data={
+                    "chat_id": TELEGRAM_CHAT_ID,
+                    "caption": _escape_html(caption)[:1024],
+                    "parse_mode": "HTML",
+                },
+                files={"document": (str(file_path).rsplit("/", 1)[-1], f, "application/pdf")},
+                timeout=60,
+            )
+        if resp.status_code == 200:
+            print(f"  ✅ Telegram: documento inviato ({file_path})")
+            return True
+        print(f"  ❌ Telegram sendDocument {resp.status_code}: {resp.text[:300]}")
+        return False
+    except Exception as e:
+        print(f"  ❌ Telegram sendDocument exception: {e}")
+        return False
+
+
 def send_message(text: str, disable_preview: bool = True) -> bool:
     """Invia un messaggio HTML a Telegram. Ritorna True se riuscito."""
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
