@@ -63,7 +63,10 @@ GEMINI_MODEL_FALLBACK = _env("GEMINI_MODEL_FALLBACK", "gemini-flash-lite-latest"
 # 14.400 req/giorno gratis — registrati su console.groq.com
 # ────────────────────────────────────────────────
 GROQ_API_KEY = _env("GROQ_API_KEY")
-GROQ_MODEL = _env("GROQ_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+# "meta-llama/llama-4-scout-17b-16e-instruct" era un modello preview, dismesso
+# da Groq (chiamate falliscono con 404 model_not_found). llama-3.3-70b-versatile
+# è nel catalogo corrente — verificato via GET /openai/v1/models il 24/7/2026.
+GROQ_MODEL = _env("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 # ────────────────────────────────────────────────
 # MISTRAL OCR (opzionale per PDF scansionati)
