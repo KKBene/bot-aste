@@ -645,25 +645,24 @@ class PDFAnalyzer:
             return mistral_result or self.analizza_pdf_nativo(pdf_path)
 
         gemini_result = self.analizza_pdf_nativo(pdf_path)
-        return self._scegli_migliore(mistral_result, gemini_result)
+        return self._scegli_migliore(gemini_result, mistral_result, "Gemini Vision", "Mistral OCR+LLM")
 
-    def _scegli_migliore(self, mistral_result: Optional[dict],
-                         gemini_result: Optional[dict]) -> Optional[dict]:
-        """Sceglie il JSON più completo; Mistral deve battere Gemini per sostituirlo."""
-        if not mistral_result:
-            return gemini_result
-        if not gemini_result:
-            print("    ✅ Uso Mistral OCR+LLM: Gemini Vision non disponibile")
-            return mistral_result
+    def _scegli_migliore(self, baseline: Optional[dict], sfidante: Optional[dict],
+                          nome_baseline: str = "primario", nome_sfidante: str = "arbitro") -> Optional[dict]:
+        """Sceglie il JSON con qualità più alta; a parità resta la baseline (non peggiora lo status quo)."""
+        if not baseline:
+            return sfidante
+        if not sfidante:
+            return baseline
 
-        s_mistral = self._score_qualita(mistral_result)
-        s_gemini = self._score_qualita(gemini_result)
-        print(f"    🧪 Confronto qualità — Mistral {s_mistral:.1f} vs Gemini Vision {s_gemini:.1f}")
-        if s_mistral > s_gemini:
-            print("    ✅ Uso Mistral OCR+LLM: qualità superiore alla baseline Gemini Vision")
-            return mistral_result
-        print("    ✅ Tengo Gemini Vision: Mistral non migliora la baseline")
-        return gemini_result
+        s_baseline = self._score_qualita(baseline)
+        s_sfidante = self._score_qualita(sfidante)
+        print(f"    🧪 Confronto qualità — {nome_baseline} {s_baseline:.1f} vs {nome_sfidante} {s_sfidante:.1f}")
+        if s_sfidante > s_baseline:
+            print(f"    ✅ Uso {nome_sfidante}: qualità superiore alla baseline {nome_baseline}")
+            return sfidante
+        print(f"    ✅ Tengo {nome_baseline}: {nome_sfidante} non migliora la baseline")
+        return baseline
 
     @staticmethod
     def _score_qualita(dati: Optional[dict]) -> float:
@@ -722,21 +721,61 @@ class PDFAnalyzer:
         return self.analizza_testo(testo)
 
     def analizza_testo(self, testo: str) -> Optional[dict]:
-        """Analizza testo già estratto: Groq/Gemini secondo router + fallback."""
+        """
+        Analizza testo già estratto: Groq/Gemini secondo router. Se il
+        risultato del provider primario è sospetto (vedi _e_sospetto),
+        richiama l'altro provider come arbitro sullo stesso testo e tiene
+        il JSON con qualità più alta (_score_qualita) — a parità resta il
+        primario. Arbitraggio tenuto stretto apposta: Gemini free tier ha
+        ~20 richieste/giorno, non deve scattare su ogni PDF.
+        """
         hints = _hints_deterministici(testo)
         prompt_groq = _build_prompt(_riduci_testo_per_groq(testo), hints)
         prompt_gemini = _build_prompt(testo, hints)
 
-        if self.text_provider == "groq":
-            risultato = self._prova_groq(prompt_groq)
-            if risultato is not None:
-                return self._applica_hints(risultato, hints)
+        def chiama_groq() -> Optional[dict]:
+            return self._applica_hints(self._prova_groq(prompt_groq), hints)
+
+        def chiama_gemini() -> Optional[dict]:
             return self._applica_hints(self._prova_gemini_chain(prompt_gemini), hints)
 
-        risultato = self._prova_gemini_chain(prompt_gemini)
-        if risultato is not None:
-            return self._applica_hints(risultato, hints)
-        return self._applica_hints(self._prova_groq(prompt_groq), hints)
+        if self.text_provider == "groq":
+            primario_fn, nome_primario = chiama_groq, "Groq"
+            arbitro_fn, nome_arbitro = chiama_gemini, "Gemini"
+        else:
+            primario_fn, nome_primario = chiama_gemini, "Gemini"
+            arbitro_fn, nome_arbitro = chiama_groq, "Groq"
+
+        primario = primario_fn()
+        if primario is not None and not self._e_sospetto(primario, hints):
+            return primario
+
+        motivo = "nessun risultato" if primario is None else "campi mancanti/fuori range"
+        print(f"    🔎 Estrazione {nome_primario} sospetta ({motivo}) → arbitraggio {nome_arbitro}")
+        arbitro = arbitro_fn()
+        return self._scegli_migliore(primario, arbitro, nome_primario, nome_arbitro)
+
+    @staticmethod
+    def _e_sospetto(dati: dict, hints: dict) -> bool:
+        """
+        True se l'estrazione ha una probabilità concreta di essere
+        sbagliata/incompleta e vale la pena un secondo parere. Criteri
+        tenuti stretti apposta (vedi analizza_testo): valore_mercato è il
+        campo che pesa di più sia in _score_qualita sia nello score finale
+        dell'opportunità (scorer.py), quindi se manca ed è mancato anche
+        l'hint deterministico (nessun valore chiaro nel testo) vale un
+        secondo tentativo. Superficie/anno fuori range sono quasi sempre
+        errori di lettura (es. cifra confusa con un altro numero in tabella).
+        """
+        if dati.get("valore_mercato") in (None, "", 0) and "valore_mercato" not in hints:
+            return True
+        sup = PDFAnalyzer._to_float(dati.get("superficie_mq"))
+        anno = PDFAnalyzer._to_float(dati.get("anno_costruzione"))
+        if sup is not None and not (10 <= sup <= 1000):
+            return True
+        if anno is not None and not (1800 <= anno <= 2100):
+            return True
+        return False
 
     def _applica_hints(self, dati: Optional[dict], hints: dict) -> Optional[dict]:
         """Applica solo hint deterministici ad alta precisione al JSON normalizzato."""

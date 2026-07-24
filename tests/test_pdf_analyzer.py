@@ -426,8 +426,86 @@ class TestRouterQualita:
             "note_critiche": "",
         }
         gemini = dict(mistral)
-        scelto = a._scegli_migliore(mistral, gemini)
+        scelto = a._scegli_migliore(gemini, mistral, "Gemini Vision", "Mistral OCR+LLM")
         assert scelto is gemini
+
+
+# ─────────────────────────────────────────────────────────────
+# TEST: arbitraggio automatico (secondo provider su estrazione sospetta)
+# ─────────────────────────────────────────────────────────────
+
+class TestArbitraggio:
+    COMPLETO = {
+        "stato_occupazione": "LIBERO",
+        "superficie_mq": 80,
+        "valore_mercato": 100000,
+        "stato_manutentivo": "BUONO",
+        "note_critiche": "",
+    }
+
+    def test_estrazione_completa_non_e_sospetta(self):
+        assert PDFAnalyzer._e_sospetto(self.COMPLETO, {}) is False
+
+    def test_valore_mercato_mancante_senza_hint_e_sospetto(self):
+        dati = dict(self.COMPLETO, valore_mercato=None)
+        assert PDFAnalyzer._e_sospetto(dati, {}) is True
+
+    def test_valore_mercato_mancante_ma_con_hint_non_e_sospetto(self):
+        """Se l'hint deterministico l'ha già colmato, non serve un secondo parere."""
+        dati = dict(self.COMPLETO, valore_mercato=None)
+        assert PDFAnalyzer._e_sospetto(dati, {"valore_mercato": 100000}) is False
+
+    def test_superficie_fuori_range_e_sospetto(self):
+        dati = dict(self.COMPLETO, superficie_mq=5000)
+        assert PDFAnalyzer._e_sospetto(dati, {}) is True
+
+    def test_anno_fuori_range_e_sospetto(self):
+        dati = dict(self.COMPLETO, anno_costruzione=3050)
+        assert PDFAnalyzer._e_sospetto(dati, {}) is True
+
+    def test_analizza_testo_non_chiama_arbitro_se_primario_ok(self):
+        """Estrazione Groq pulita: Gemini non deve nemmeno essere chiamato (costa quota)."""
+        a = PDFAnalyzer("", "")
+        a.text_provider = "groq"
+        with patch.object(a, "_prova_groq", return_value=dict(self.COMPLETO)) as mock_groq, \
+             patch.object(a, "_prova_gemini_chain") as mock_gemini:
+            risultato = a.analizza_testo("testo perizia qualunque")
+        mock_groq.assert_called_once()
+        mock_gemini.assert_not_called()
+        assert risultato["valore_mercato"] == 100000
+
+    def test_analizza_testo_chiama_arbitro_se_primario_sospetto(self):
+        """Groq senza valore_mercato (e nessun hint): deve scattare l'arbitraggio Gemini."""
+        a = PDFAnalyzer("", "")
+        a.text_provider = "groq"
+        groq_result = dict(self.COMPLETO, valore_mercato=None)
+        gemini_result = dict(self.COMPLETO, valore_mercato=120000)
+        with patch.object(a, "_prova_groq", return_value=groq_result), \
+             patch.object(a, "_prova_gemini_chain", return_value=gemini_result) as mock_gemini:
+            risultato = a.analizza_testo("testo perizia senza valore chiaro")
+        mock_gemini.assert_called_once()
+        assert risultato["valore_mercato"] == 120000  # l'arbitro ha trovato il campo mancante
+
+    def test_analizza_testo_tiene_primario_se_arbitro_non_migliora(self):
+        """A parità/peggioramento l'arbitro non deve sostituire il primario."""
+        a = PDFAnalyzer("", "")
+        a.text_provider = "groq"
+        groq_result = dict(self.COMPLETO, valore_mercato=None)
+        gemini_result = {"valore_mercato": None}  # arbitro anche peggio: quasi tutto assente
+        with patch.object(a, "_prova_groq", return_value=groq_result), \
+             patch.object(a, "_prova_gemini_chain", return_value=gemini_result):
+            risultato = a.analizza_testo("testo perizia senza valore chiaro")
+        assert risultato["stato_occupazione"] == "LIBERO"  # resta il primario, più completo
+
+    def test_analizza_testo_primario_none_usa_arbitro(self):
+        a = PDFAnalyzer("", "")
+        a.text_provider = "groq"
+        gemini_result = dict(self.COMPLETO)
+        with patch.object(a, "_prova_groq", return_value=None), \
+             patch.object(a, "_prova_gemini_chain", return_value=gemini_result) as mock_gemini:
+            risultato = a.analizza_testo("testo perizia illeggibile")
+        mock_gemini.assert_called_once()
+        assert risultato["valore_mercato"] == 100000
 
 
 # ─────────────────────────────────────────────────────────────
