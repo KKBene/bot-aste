@@ -331,9 +331,22 @@ def _render_pdf(html: str, output_path: Path) -> Path:
     return output_path
 
 
+def _ordina_per_convenienza(aste: list) -> list:
+    """
+    Ordina per fascia di score (bande da 5 punti) e, dentro la stessa fascia,
+    per prezzo crescente — budget limitato: a parità/vicinanza di punteggio
+    si preferisce l'opzione più economica.
+    """
+    def chiave(a):
+        score = a.get("score") or 0
+        prezzo = a.get("offerta_minima") or a.get("prezzo_base") or float("inf")
+        return (-(score // 5), prezzo)
+    return sorted(aste, key=chiave)
+
+
 def genera_report_lombardia(aste_citta: list, novita: dict, out_dir: Path,
                              nuovi_totali: int, ribassi_totali: int) -> Path:
-    aste_citta = sorted(aste_citta, key=lambda a: a.get("score") or 0, reverse=True)
+    aste_citta = _ordina_per_convenienza(aste_citta)
     html = _documento_html(
         "Casa — Lombardia",
         f"Report del {datetime.now().strftime('%d/%m/%Y')} — "
@@ -344,8 +357,8 @@ def genera_report_lombardia(aste_citta: list, novita: dict, out_dir: Path,
 
 def genera_report_vacanza(aste_montagna: list, aste_mare: list, novita: dict,
                            out_dir: Path, nuovi_totali: int, ribassi_totali: int) -> Path:
-    aste_montagna = sorted(aste_montagna, key=lambda a: a.get("score") or 0, reverse=True)
-    aste_mare = sorted(aste_mare, key=lambda a: a.get("score") or 0, reverse=True)
+    aste_montagna = _ordina_per_convenienza(aste_montagna)
+    aste_mare = _ordina_per_convenienza(aste_mare)
     html = _documento_html(
         "Vacanza — Montagna & Mare",
         f"Report del {datetime.now().strftime('%d/%m/%Y')} — "
