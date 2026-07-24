@@ -55,6 +55,13 @@ def inserisci_asta(asta: dict) -> bool:
         "immagine_url": asta.get("immagine_url"),
         "sheet_type": asta.get("sheet_type", "residenziale"),
         "categoria_localita": asta.get("categoria_localita"),
+        "tipologia_immobile": asta.get("tipologia_immobile"),
+        # campi deterministici pre-riempiti dalla fonte quando disponibili (es.
+        # PVP: impoStima, superficie, disponibilita). Per fonti che non li danno
+        # restano None e verranno popolati dall'analisi PDF.
+        "valore_mercato": asta.get("valore_mercato"),
+        "superficie_mq": asta.get("superficie_mq"),
+        "stato_occupazione": asta.get("stato_occupazione"),
         "scraping_date": datetime.now().isoformat(),
         "stato_annuncio": "attivo",
         "prima_vista": datetime.now().isoformat(),
