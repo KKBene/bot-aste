@@ -22,6 +22,9 @@ jobs:
       - name: Installa dipendenze (set leggero per il job)
         run: pip install -r requirements-job.txt
 
+      - name: Installa Chromium per il report PDF
+        run: playwright install --with-deps chromium
+
       - name: Esegui il bot
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
