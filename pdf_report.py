@@ -31,20 +31,20 @@ BASE_DIR = Path(__file__).parent
 BRAND_GRADIENT = "linear-gradient(135deg, #4338ca 0%, #7c3aed 100%)"
 
 COLORE_SEZIONE = {
-    "citta": "#2563eb",
-    "montagna": "#7c3aed",
-    "mare": "#0891b2",
+    "citta": "#60a5fa",
+    "montagna": "#a78bfa",
+    "mare": "#22d3ee",
 }
 NOME_SEZIONE_LABEL = {"citta": "Lombardia", "montagna": "Montagna", "mare": "Mare"}
 
 
 def _score_hex(score: float) -> str:
     if score >= 75:
-        return "#e11d48"   # rose — opportunità forte
+        return "#f43f5e"   # rose — opportunità forte
     if score >= 60:
-        return "#d97706"   # ambra
+        return "#f59e0b"   # ambra
     if score >= 45:
-        return "#2563eb"   # blu
+        return "#3b82f6"   # blu
     return "#64748b"       # slate
 
 
@@ -113,7 +113,7 @@ def _card_html(asta: dict, novita: dict) -> str:
     bd = asta.get("score_breakdown") or {}
     margine_eur, margine_pct = bd.get("margine_eur"), bd.get("margine_pct")
     if margine_eur is not None and margine_pct is not None:
-        colore = "#059669" if margine_pct >= 15 else ("#d97706" if margine_pct >= 0 else "#dc2626")
+        colore = "#34d399" if margine_pct >= 15 else ("#fbbf24" if margine_pct >= 0 else "#f87171")
         roi = bd.get("roi_pct")
         roi_str = f" · ROI {roi:+.0f}%" if roi is not None else ""
         righe_extra.append(
@@ -160,7 +160,7 @@ def _card_html(asta: dict, novita: dict) -> str:
         g = giorni_rimanenti(termine)
         urg_hex = "#64748b"
         if g is not None:
-            urg_hex = "#dc2626" if g <= 7 else ("#d97706" if g <= 21 else "#059669")
+            urg_hex = "#f87171" if g <= 7 else ("#fbbf24" if g <= 21 else "#34d399")
         righe_extra.append(
             f'<div class="riga">Offerte entro <b>{_esc(str(termine))}</b> '
             f'<span style="color:{urg_hex};font-weight:700">'
@@ -216,11 +216,14 @@ def _sezione_html(chiave: str, aste: list, novita: dict) -> str:
 _CSS = '''
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 * { box-sizing: border-box; }
+html, body {
+  background: #0b1120;
+}
 body {
   font-family: 'Inter', -apple-system, sans-serif;
-  color: #0f172a;
+  color: #e2e8f0;
   margin: 0;
-  padding: 8mm 12mm 4mm 12mm;
+  padding: 10mm 12mm 10mm 12mm;
   font-size: 12.5px;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
@@ -236,7 +239,7 @@ body {
 .banner .sub { font-size: 12px; opacity: .92; margin-bottom: 12px; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .chip {
-  background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35);
+  background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.3);
   border-radius: 999px; padding: 4px 12px; font-size: 11px; font-weight: 600;
 }
 .section-header {
@@ -247,15 +250,15 @@ body {
 .section-header .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .card {
   display: flex; gap: 14px;
-  background: #ffffff; border: 1px solid #eef0f4; border-radius: 16px;
+  background: #161f32; border: 1px solid #26314a; border-radius: 16px;
   padding: 12px; margin-bottom: 10px;
-  box-shadow: 0 1px 2px rgba(15,23,42,.05);
+  box-shadow: 0 2px 6px rgba(0,0,0,.35);
   break-inside: avoid; page-break-inside: avoid;
 }
 .card.no-foto { padding: 14px 16px; }
 .foto {
   width: 116px; height: 116px; border-radius: 12px; object-fit: cover;
-  flex-shrink: 0; background: #f1f5f9;
+  flex-shrink: 0; background: #1f2a42; border: 1px solid #2d3958;
 }
 .card-body { flex: 1; min-width: 0; }
 .card-top { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 4px; }
@@ -265,7 +268,7 @@ body {
   color: white; font-weight: 800; font-size: 13.5px;
 }
 .titolo { flex: 1; min-width: 0; }
-.indirizzo { font-size: 13px; line-height: 1.35; margin-top: 2px; }
+.indirizzo { font-size: 13px; line-height: 1.35; margin-top: 2px; color: #f1f5f9; }
 .badge {
   display: inline-block; padding: 2px 9px; border-radius: 999px;
   font-size: 9px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase;
@@ -273,16 +276,16 @@ body {
 }
 .badge-nuovo { background: #059669; }
 .badge-ribasso { background: #dc2626; }
-.prezzo { font-size: 18px; font-weight: 800; margin: 6px 0 4px; }
-.prezzo .sconto { color: #059669; font-size: 12px; font-weight: 700; margin-left: 6px; }
-.prezzo .mq { color: #64748b; font-size: 11.5px; font-weight: 500; margin-left: 6px; }
-.riga { font-size: 11.5px; line-height: 1.55; }
-.riga.muted { color: #475569; }
-.riga.warn { color: #b91c1c; }
-.riga.note { color: #92400e; font-style: italic; }
+.prezzo { font-size: 18px; font-weight: 800; margin: 6px 0 4px; color: #f8fafc; }
+.prezzo .sconto { color: #34d399; font-size: 12px; font-weight: 700; margin-left: 6px; }
+.prezzo .mq { color: #7c8aa5; font-size: 11.5px; font-weight: 500; margin-left: 6px; }
+.riga { font-size: 11.5px; line-height: 1.55; color: #cbd5e1; }
+.riga.muted { color: #8896ad; }
+.riga.warn { color: #f87171; }
+.riga.note { color: #fbbf24; font-style: italic; }
 .links { margin-top: 5px; font-size: 11px; }
-.links a { color: #1d4ed8; text-decoration: none; font-weight: 600; }
-.empty { color: #64748b; font-size: 13px; padding: 20px 0; }
+.links a { color: #60a5fa; text-decoration: none; font-weight: 600; }
+.empty { color: #8896ad; font-size: 13px; padding: 20px 0; }
 '''
 
 
@@ -305,15 +308,6 @@ def _documento_html(titolo: str, sottotitolo: str, sezioni: list, novita: dict) 
 </body></html>'''
 
 
-_FOOTER_TEMPLATE = '''
-<div style="font-size:8px;width:100%;padding:0 12mm;color:#9ca3af;
-            font-family:Inter,-apple-system,sans-serif;
-            display:flex;justify-content:space-between;">
-  <span>Bot Aste — generato __TIMESTAMP__</span>
-  <span><span class="pageNumber"></span> / <span class="totalPages"></span></span>
-</div>'''
-
-
 def _render_pdf(html: str, output_path: Path) -> Path:
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -324,11 +318,14 @@ def _render_pdf(html: str, output_path: Path) -> Path:
             path=str(output_path),
             format="A4",
             print_background=True,
-            margin={"top": "6mm", "bottom": "12mm", "left": "0mm", "right": "0mm"},
-            display_header_footer=True,
-            header_template="<div></div>",
-            footer_template=_FOOTER_TEMPLATE.replace(
-                "__TIMESTAMP__", datetime.now().strftime("%d/%m/%Y %H:%M")),
+            # margin=0 ovunque: Chromium renderizza header/footer_template in
+            # un box a parte con sfondo bianco fisso indipendente dal CSS —
+            # provato, non ha funzionato in questo ambiente (nessun colore
+            # passato ai template veniva applicato) e lasciava una striscia
+            # bianca ai bordi di ogni pagina nel tema dark. Niente numero di
+            # pagina per pagina — non essenziale per una lettura a swipe su
+            # mobile, e il fondo scuro arriva così davvero a bordo pagina.
+            margin={"top": "0mm", "bottom": "0mm", "left": "0mm", "right": "0mm"},
         )
         browser.close()
     return output_path
