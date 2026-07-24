@@ -16,7 +16,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from pdf_analyzer import PDFAnalyzer, _hints_deterministici
+from pdf_analyzer import PDFAnalyzer, _hints_deterministici, _parse_euro
 from config import GEMINI_API_KEY, GEMINI_MODEL
 
 # PDF pubblici per test (piccole perizie campione)
@@ -390,6 +390,23 @@ class TestRouterQualita:
         assert hints["valore_mercato"] == 43327.5
         assert hints["costi_sanatoria"] == 3000.0
         assert hints["spese_condominiali_arretrate"] == 14855.84
+
+    def test_hint_sanatoria_migliaia_senza_virgola(self):
+        """'8.500 euro' (stile IT, nessuna virgola decimale) deve fare 8500, non 8.5."""
+        testo = "Costi stimati per sanatoria: 8.500 euro."
+        hints = _hints_deterministici(testo)
+        assert hints["costi_sanatoria"] == 8500.0
+
+    @pytest.mark.parametrize("val,atteso", [
+        ("8.500", 8500.0),
+        ("1.500.000", 1500000.0),
+        ("500.000", 500000.0),
+        ("8.5", 8.5),
+        ("100.50", 100.5),
+        ("46.327,50", 46327.5),
+    ])
+    def test_parse_euro_migliaia_vs_decimali(self, val, atteso):
+        assert _parse_euro(val) == atteso
 
     def test_hint_quota_frazionata_catturata(self):
         """Quota 1/3 nel testo deve essere imposta deterministicamente."""

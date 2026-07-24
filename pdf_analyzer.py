@@ -291,6 +291,14 @@ def _parse_euro(val: str) -> Optional[float]:
         s = s.replace(".", "").replace(",", ".")
     elif "," in s:
         s = s.replace(",", ".")
+    elif "." in s:
+        # Solo punto, nessuna virgola: in stile italiano è separatore delle
+        # migliaia se ogni gruppo dopo il primo ha esattamente 3 cifre
+        # ("8.500" -> 8500, "1.500.000" -> 1500000), altrimenti è decimale
+        # ("8.5" -> 8.5).
+        gruppi = s.split(".")
+        if all(len(g) == 3 for g in gruppi[1:]):
+            s = s.replace(".", "")
     try:
         return float(s)
     except ValueError:
