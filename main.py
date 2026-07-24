@@ -23,13 +23,19 @@ from pathlib import Path
 
 from config import (
     COMUNI_PER_LOCALITA, SCRAPA_LOCALITA,
-    CATEGORIA_RESIDENZIALE,
+    CATEGORIA_RESIDENZIALE, FONTE_ASTE,
     GEMINI_API_KEY, GEMINI_MODEL,
     SCORE_MINIMO_NOTIFICA, TOP_N_NOTIFICA,
     SYNC_TO_SHEETS,
 )
 import database as db
-from scraper_api import run_scraper   # API JSON: molto più veloce di Playwright
+# Fonte dati selezionabile da config: PVP (fonte-madre, default) o astalegale
+# (storica, dormiente). I due run_scraper condividono lo stesso contratto
+# {nuovi, esistenti, codici_per_comune}.
+if FONTE_ASTE == "astalegale":
+    from scraper_api import run_scraper
+else:
+    from scraper_pvp import run_scraper, merge_deterministici
 from pdf_analyzer import PDFAnalyzer
 from scorer import calcola_score
 from notifier import send_start, send_digest, send_error, send_document, send_message, aste_notificabili
@@ -90,7 +96,7 @@ def main():
         # ─────────────────────────────────────────────────────
         # STEP 1: Scraping
         # ─────────────────────────────────────────────────────
-        step("📡 STEP 1 — Scraping astalegale.net")
+        step(f"📡 STEP 1 — Scraping fonte: {FONTE_ASTE}")
 
         codici_esistenti = db.get_codici_esistenti() if not DRY_RUN else set()
         attive = db.get_aste_attive() if not DRY_RUN else {}
@@ -169,54 +175,55 @@ def main():
                 sparite_count = db.marca_sparite(spariti)
                 print(f"  🗑️  Annunci non più disponibili: {sparite_count}")
 
+            # Rete di sicurezza: marca 'venduto' le aste con data già passata
+            # (non più offerte valide), anche se ancora viste nello scrape.
+            scadute = db.marca_scadute()
+            if scadute:
+                print(f"  📅 Aste scadute marcate come vendute: {scadute}")
+
         print(f"  ✅ Inseriti: {nuovi_count} | Variazioni prezzo: {variazioni_count} | "
               f"Spariti/venduti: {sparite_count}")
 
         # ─────────────────────────────────────────────────────
         # STEP 3: Analisi PDF
         # ─────────────────────────────────────────────────────
-        step("🤖 STEP 3 — Analisi PDF con Gemini")
+        step("🤖 STEP 3 — Analisi PDF (perizia, con fallback avviso)")
 
         if SKIP_PDF:
             print("  ⏭️  Saltato (--no-pdf)")
         elif DRY_RUN:
             print("  ⏭️  Saltato (dry-run)")
         else:
-            aste_da_analizzare = db.get_aste_senza_analisi()
+            # Lotti con un documento analizzabile: perizia se c'è, altrimenti
+            # avviso di vendita (fallback verificato — contiene occupazione,
+            # superficie, valore, catasto).
+            aste_da_analizzare = db.get_aste_da_analizzare()
+            if LIMIT_PDF is not None:
+                aste_da_analizzare = aste_da_analizzare[:LIMIT_PDF]
+                print(f"  ⚙️  Limite PDF: analizzo {len(aste_da_analizzare)}")
             print(f"  PDF da analizzare: {len(aste_da_analizzare)}")
 
-            if aste_da_analizzare:
-                # Leggi anche il link_dettaglio per passarlo al downloader PDF
-                res_full = (
-                    db.get_client()
-                    .table("aste")
-                    .select("codice, link_perizia, link_dettaglio")
-                    .eq("analisi_pdf", False)
-                    .not_.is_("link_perizia", "null")
-                    .neq("link_perizia", "")
-                    .execute()
-                )
-                aste_da_analizzare = res_full.data or []
-                if LIMIT_PDF is not None:
-                    aste_da_analizzare = aste_da_analizzare[:LIMIT_PDF]
-                    print(f"  ⚙️  Limite PDF: analizzo {len(aste_da_analizzare)}")
-
-                analyzer = PDFAnalyzer(GEMINI_API_KEY, GEMINI_MODEL)
-                for asta in aste_da_analizzare:
-                    codice = asta["codice"]
-                    url = asta.get("link_perizia", "")
-                    detail_url = asta.get("link_dettaglio")
-                    print(f"\n  📄 {codice}")
-                    try:
-                        dati = analyzer.analizza_pdf_da_url(url, detail_url)
-                        if dati:
-                            db.aggiorna_analisi_pdf(codice, dati)
-                            pdf_count += 1
-                        else:
-                            print("    ⚠️ Analisi non riuscita")
-                    except Exception as e:
-                        print(f"    ❌ Errore: {e}")
-                        errori_count += 1
+            analyzer = PDFAnalyzer(GEMINI_API_KEY, GEMINI_MODEL)
+            for asta in aste_da_analizzare:
+                codice = asta["codice"]
+                url = asta.get("link_perizia") or asta.get("link_avviso_vendita")
+                fonte_doc = "perizia" if asta.get("link_perizia") else "avviso"
+                detail_url = asta.get("link_dettaglio")
+                print(f"\n  📄 {codice} ({fonte_doc})")
+                try:
+                    dati = analyzer.analizza_pdf_da_url(url, detail_url)
+                    if dati:
+                        # Preserva i campi deterministici ufficiali PVP (valore/
+                        # superficie/occupazione): l'LLM riempie solo i buchi.
+                        if FONTE_ASTE != "astalegale":
+                            dati = merge_deterministici(dati, asta)
+                        db.aggiorna_analisi_pdf(codice, dati)
+                        pdf_count += 1
+                    else:
+                        print("    ⚠️ Analisi non riuscita")
+                except Exception as e:
+                    print(f"    ❌ Errore: {e}")
+                    errori_count += 1
 
         # ─────────────────────────────────────────────────────
         # STEP 4: Scoring

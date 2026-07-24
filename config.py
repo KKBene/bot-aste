@@ -89,6 +89,13 @@ USE_MISTRAL_OCR = _env_bool("USE_MISTRAL_OCR", True)
 PDF_SCAN_ANALYSIS_MODE = _env("PDF_SCAN_ANALYSIS_MODE", "gemini").lower()
 
 # ────────────────────────────────────────────────
+# FONTE DATI ASTE
+# - "pvp":        pvp.giustizia.it (fonte-madre di tutte le aste italiane) — default
+# - "astalegale": astalegale.net (fonte storica, ora dormiente/fallback)
+# ────────────────────────────────────────────────
+FONTE_ASTE = _env("FONTE_ASTE", "pvp").lower()
+
+# ────────────────────────────────────────────────
 # GOOGLE SHEETS (export opzionale)
 # ────────────────────────────────────────────────
 GOOGLE_SHEET_ID = "1QvK3ZNr264vnEjDgr4_T9EnuvJMM_OcpkrliE-yhVfg"

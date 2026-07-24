@@ -41,7 +41,7 @@ class TestTokenDistintivo:
         ("san-martino-di-castrozza", "castrozza"),
         ("busto-arsizio", "arsizio"),
         ("tradate", "tradate"),
-        ("venegono-superiore", "superiore"),
+        ("venegono-superiore", "venegono"),   # non "superiore": è un qualificatore
     ])
     def test_token(self, slug, atteso):
         assert s.token_distintivo(slug) == atteso
@@ -49,6 +49,23 @@ class TestTokenDistintivo:
     def test_mai_un_connettore(self):
         for slug in ["la-thuile", "san-martino-di-castrozza", "corvara-in-badia"]:
             assert s.token_distintivo(slug) not in s._CONNETTORI
+
+    @pytest.mark.parametrize("slug,atteso", [
+        # i qualificatori geografici sono condivisi da molti comuni: usarli come
+        # termine satura la pagina di risultati con omonimi e perde i lotti veri
+        ("venegono-inferiore", "venegono"),      # NON "inferiore"
+        ("santa-margherita-ligure", "margherita"),  # NON "ligure"
+        ("monterosso-al-mare", "monterosso"),
+        ("diano-marina", "diano"),
+        ("pietra-ligure", "pietra"),
+    ])
+    def test_evita_qualificatori_geografici(self, slug, atteso):
+        assert s.token_distintivo(slug) == atteso
+
+    def test_mai_un_qualificatore(self):
+        for slug in ["venegono-inferiore", "venegono-superiore", "diano-marina",
+                     "santa-margherita-ligure", "monterosso-al-mare"]:
+            assert s.token_distintivo(slug) not in s._QUALIFICATORI
 
 
 # ─────────────────────────────────────────────────────────────
@@ -223,3 +240,97 @@ class TestRicercaFiltro:
         monkeypatch.setattr(s, "_post_ricerca", lambda t, p: self._fake_page(lotti))
         out = s.ricerca_comune("tradate", oggi="2026-07-25")
         assert [c["id"] for c in out] == [1]
+
+
+# ─────────────────────────────────────────────────────────────
+# _norm_data_asta — formato DD/MM/YYYY per _data_asta_passata
+# ─────────────────────────────────────────────────────────────
+
+class TestNormDataAsta:
+    @pytest.mark.parametrize("val,atteso", [
+        ("2026-10-07", "07/10/2026"),           # ISO
+        ("2026-10-07T12:00", "07/10/2026"),     # ISO con ora
+        ("07/10/2026", "07/10/2026"),           # già giusto
+        (None, None),
+        ("", None),
+    ])
+    def test_norm(self, val, atteso):
+        assert s._norm_data_asta(val) == atteso
+
+
+# ─────────────────────────────────────────────────────────────
+# run_scraper — contratto drop-in per main.py
+# ─────────────────────────────────────────────────────────────
+
+class TestRunScraperContratto:
+    def _setup(self, monkeypatch):
+        lotti = {
+            "tradate": [
+                {"id": 100, "dataVendita": "2026-12-01", "categoriaLotto": "IMMOBILE_RESIDENZIALE",
+                 "indirizzo": {"citta": "Tradate"}, "prezzoBaseAsta": 80000, "offertaMinima": 60000},
+                {"id": 101, "dataVendita": "2026-12-01", "categoriaLotto": "IMMOBILE_RESIDENZIALE",
+                 "indirizzo": {"citta": "Tradate"}, "prezzoBaseAsta": 50000, "offertaMinima": 37500},
+            ],
+        }
+        monkeypatch.setattr(s, "ricerca_comune", lambda slug, oggi=None: lotti.get(slug, []))
+        monkeypatch.setattr(s, "dettaglio", lambda idv: None)  # niente rete
+
+    def test_split_nuovi_esistenti(self, monkeypatch):
+        self._setup(monkeypatch)
+        out = s.run_scraper(["tradate"], codici_esistenti={"PVP-100"},
+                            categoria_localita={"tradate": "citta"}, verbose=False)
+        assert [a["codice"] for a in out["nuovi"]] == ["PVP-101"]      # 100 già nel DB
+        assert [e["codice"] for e in out["esistenti"]] == ["PVP-100"]
+        assert out["esistenti"][0]["prezzo_base"] == 80000
+
+    def test_codici_per_comune_keyed_by_citta(self, monkeypatch):
+        self._setup(monkeypatch)
+        out = s.run_scraper(["tradate"], codici_esistenti=set(),
+                            categoria_localita={"tradate": "citta"}, verbose=False)
+        # chiave = la citta salvata in `comune`, per far combaciare la rilevazione spariti
+        assert set(out["codici_per_comune"]) == {"Tradate"}
+        assert set(out["codici_per_comune"]["Tradate"]) == {"PVP-100", "PVP-101"}
+
+    def test_categoria_localita_propagata(self, monkeypatch):
+        self._setup(monkeypatch)
+        out = s.run_scraper(["tradate"], codici_esistenti=set(),
+                            categoria_localita={"tradate": "montagna"}, verbose=False)
+        assert all(a["categoria_localita"] == "montagna" for a in out["nuovi"])
+
+
+# ─────────────────────────────────────────────────────────────
+# merge_deterministici — preserva i valori PVP ufficiali dall'LLM
+# ─────────────────────────────────────────────────────────────
+
+class TestMergeDeterministici:
+    def test_preserva_superficie_e_occupazione(self):
+        llm = {"superficie_mq": 99, "stato_occupazione": "OCCUPATO_DEBITORE", "note_critiche": "x"}
+        riga = {"superficie_mq": 104, "stato_occupazione": "LIBERO",
+                "valore_mercato": None, "prezzo_base": 80000}
+        out = s.merge_deterministici(llm, riga)
+        assert out["superficie_mq"] == 104            # PVP vince
+        assert out["stato_occupazione"] == "LIBERO"   # PVP vince
+        assert out["note_critiche"] == "x"            # campo LLM intatto
+
+    def test_valore_preservato_se_diverso_da_base(self):
+        llm = {"valore_mercato": 120000}
+        riga = {"valore_mercato": 118500, "prezzo_base": 93100,
+                "superficie_mq": None, "stato_occupazione": None}
+        out = s.merge_deterministici(llm, riga)
+        assert out["valore_mercato"] == 118500        # stima PVP vera → vince
+
+    def test_valore_llm_vince_se_stima_uguale_a_base(self):
+        """impoStima==base è un placeholder: lì la perizia (LLM) è più affidabile."""
+        llm = {"valore_mercato": 79500}
+        riga = {"valore_mercato": 80000, "prezzo_base": 80000,
+                "superficie_mq": None, "stato_occupazione": None}
+        out = s.merge_deterministici(llm, riga)
+        assert out["valore_mercato"] == 79500         # LLM vince
+
+    def test_noop_se_db_vuoto(self):
+        """Fonte senza deterministici (tutti None): l'LLM resta intatto."""
+        llm = {"superficie_mq": 70, "stato_occupazione": "LIBERO", "valore_mercato": 100000}
+        riga = {"superficie_mq": None, "stato_occupazione": None,
+                "valore_mercato": None, "prezzo_base": 50000}
+        out = s.merge_deterministici(dict(llm), riga)
+        assert out == llm

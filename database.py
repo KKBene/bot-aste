@@ -158,6 +158,26 @@ def marca_sparite(codici: list) -> int:
     return len(codici)
 
 
+def marca_scadute() -> int:
+    """
+    Igiene DB: marca 'venduto' le aste ancora 'attivo' la cui data asta è già
+    passata. Rete di sicurezza oltre a marca_sparite (che dipende dal ri-vedere
+    il comune nello scrape): un'asta la cui data è trascorsa non è più un'offerta
+    valida per un investitore. Ritorna quante ne ha marcate.
+    """
+    client = get_client()
+    res = (
+        client.table("aste")
+        .select("codice, data_asta")
+        .eq("stato_annuncio", "attivo")
+        .execute()
+    )
+    scadute = [r["codice"] for r in (res.data or []) if _data_asta_passata(r.get("data_asta"))]
+    for codice in scadute:
+        client.table("aste").update({"stato_annuncio": "venduto"}).eq("codice", codice).execute()
+    return len(scadute)
+
+
 def _data_asta_passata(data_asta: Optional[str]) -> bool:
     """True se la data asta (formato 'DD/MM/YYYY ...') è già passata."""
     if not data_asta:
@@ -233,6 +253,29 @@ def get_aste_senza_analisi() -> list:
         .execute()
     )
     return res.data or []
+
+
+def get_aste_da_analizzare() -> list:
+    """
+    Aste attive senza analisi PDF che hanno ALMENO un documento analizzabile
+    (perizia o, in mancanza, avviso di vendita). Ritorna anche i campi
+    deterministici PVP e il prezzo base, per il merge che li preserva.
+    L'avviso è un fallback valido: contiene occupazione/superficie/valore/catasto.
+    """
+    res = (
+        get_client()
+        .table("aste")
+        .select("codice, link_perizia, link_avviso_vendita, link_dettaglio, "
+                "prezzo_base, valore_mercato, superficie_mq, stato_occupazione")
+        .eq("analisi_pdf", False)
+        .eq("stato_annuncio", "attivo")
+        .execute()
+    )
+    out = []
+    for r in (res.data or []):
+        if r.get("link_perizia") or r.get("link_avviso_vendita"):
+            out.append(r)
+    return out
 
 
 def get_aste_senza_score() -> list:

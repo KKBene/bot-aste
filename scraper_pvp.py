@@ -16,6 +16,7 @@ codici astalegale (P4588884...) e poter filtrare/rollbackare per fonte.
 """
 from __future__ import annotations
 
+import os
 import re
 import time
 import unicodedata
@@ -26,18 +27,30 @@ from typing import Optional
 import requests
 
 # ──────────────────────────────────────────────────────────────
-# Endpoint. I segmenti con token (ric-.../ve-...) sono id di bundle
-# Entando: possono cambiare a un redeploy del portale. Verificati
-# funzionanti; se un giorno danno 404, rigenerarli da una pagina PVP
-# (vedi reference PVP). PVP_TOKEN_* isolati per aggiornarli in un punto solo.
+# Endpoint. I segmenti con token (ric-.../ve-...) sono id di bundle Entando:
+# possono cambiare a un redeploy del portale, e in quel caso le chiamate
+# iniziano a dare 404. Sono sovrascrivibili da env (PVP_RIC_TOKEN /
+# PVP_VE_TOKEN) così si rimedia senza toccare il codice.
+#
+# Come recuperarli se cambiano: aprire https://pvp.giustizia.it/pvp/ con la
+# rete del browser aperta e leggere il path delle chiamate XHR
+# (".../ric-<hash>/ric-ms/ricerca/vendite" e ".../ve-<hash>/ve-ms/vendite/...").
+# Il token `ve-` si trova anche nel bundle `main.*.js` della pagina.
 # ──────────────────────────────────────────────────────────────
 PVP_HOST = "https://pvp.giustizia.it"
 PVP_RESOURCE_HOST = "https://resource-pvp.giustizia.it"
-RIC_TOKEN = "ric-496b258c-986a1b71"
-VE_TOKEN = "ve-3f723b85-986a1b71"
+RIC_TOKEN = os.getenv("PVP_RIC_TOKEN", "ric-496b258c-986a1b71")
+VE_TOKEN = os.getenv("PVP_VE_TOKEN", "ve-3f723b85-986a1b71")
 
 URL_RICERCA = f"{PVP_HOST}/{RIC_TOKEN}/ric-ms/ricerca/vendite"
 URL_DETTAGLIO = f"{PVP_HOST}/{VE_TOKEN}/ve-ms/vendite/{{id}}/restricted"
+
+_ERRORE_TOKEN = (
+    "PVP ha risposto 404 su {url}\n"
+    "    → probabile cambio dei token di bundle del portale.\n"
+    "    Recuperali dalla rete del browser su https://pvp.giustizia.it/pvp/ e\n"
+    "    impostali via env: PVP_RIC_TOKEN=ric-<hash> PVP_VE_TOKEN=ve-<hash>"
+)
 
 _HEADERS = {
     "Content-Type": "application/json",
@@ -52,6 +65,17 @@ _HEADERS = {
 _CONNETTORI = {
     "di", "in", "al", "della", "del", "dei", "delle", "d", "da", "e", "su",
     "la", "lo", "le", "san", "santa", "santo", "sant",
+}
+
+# Qualificatori geografici: parole lunghe ma condivise da molti comuni. Se
+# scelte come termine di ricerca saturano la pagina di risultati con comuni
+# omonimi e i lotti veri finiscono fuori (es. "venegono-inferiore" cercato
+# come "inferiore" → 0 risultati utili). Vanno escluse dalla scelta del token.
+_QUALIFICATORI = {
+    "inferiore", "superiore", "marittimo", "marittima", "marina", "mare",
+    "ligure", "monte", "valle", "terme", "bagni", "piano", "alta", "alto",
+    "bassa", "basso", "nuovo", "nuova", "vecchio", "vecchia", "grande",
+    "piccolo", "piccola", "centro", "borgo", "villa", "casa", "colle",
 }
 
 PAGE_SIZE = 50
@@ -86,8 +110,14 @@ def slug_to_nome(slug: str) -> str:
 
 
 def token_distintivo(slug: str) -> str:
-    """La parola più lunga non-connettore: massimizza la specificità della ricerca."""
-    cand = [p for p in slug.split("-") if p not in _CONNETTORI and len(p) > 2]
+    """
+    Il token più specifico da dare a `localita`: la parola più lunga che non sia
+    un connettore né un qualificatore geografico condiviso (vedi _QUALIFICATORI).
+    A parità di lunghezza vince il primo, di norma il nome proprio del comune.
+    """
+    parti = [p for p in slug.split("-") if p not in _CONNETTORI and len(p) > 2]
+    specifici = [p for p in parti if p not in _QUALIFICATORI]
+    cand = specifici or parti
     return max(cand, key=len) if cand else slug.replace("-", " ")
 
 
@@ -122,6 +152,8 @@ def _post_ricerca(termine: str, pagina: int) -> dict:
     })
     body = {"tipoLotto": "IMMOBILI", "flagRicerca": 1, "localita": termine, "indirizzo": ""}
     r = requests.post(f"{URL_RICERCA}?{qs}", headers=_HEADERS, json=body, timeout=30)
+    if r.status_code == 404:
+        raise RuntimeError(_ERRORE_TOKEN.format(url=URL_RICERCA))
     r.raise_for_status()
     return r.json().get("body", {}) or {}
 
@@ -261,6 +293,41 @@ def _to_float(v):
         return None
 
 
+def _norm_data_asta(v: Optional[str]) -> Optional[str]:
+    """
+    Normalizza la data asta a 'DD/MM/YYYY' — il formato su cui
+    database._data_asta_passata fa il match. Il dettaglio PVP dà già
+    '07/10/2026', il sommario dà ISO '2026-10-07[T..]': uniformiamo.
+    """
+    if not v:
+        return None
+    v = str(v).strip()
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", v)          # ISO -> DD/MM/YYYY
+    if m:
+        return f"{m.group(3)}/{m.group(2)}/{m.group(1)}"
+    return v
+
+
+def merge_deterministici(dati_llm: dict, riga_db: dict) -> dict:
+    """
+    Fonde l'estrazione LLM con i campi deterministici ufficiali PVP già in DB:
+    dove PVP ha un valore affidabile, non lasciarlo sovrascrivere dall'LLM.
+      - superficie_mq / stato_occupazione: si preservano se presenti in DB.
+      - valore_mercato: si preserva SOLO se è una stima vera, cioè diversa dal
+        prezzo base (impoStima==base è spesso un placeholder → lì la perizia
+        analizzata dall'LLM è più affidabile).
+    Per fonti senza dati deterministici (valori None) è un no-op sicuro.
+    Muta e ritorna `dati_llm`.
+    """
+    for campo in ("superficie_mq", "stato_occupazione"):
+        if riga_db.get(campo) is not None:
+            dati_llm[campo] = riga_db[campo]
+    vm = riga_db.get("valore_mercato")
+    if vm is not None and vm != riga_db.get("prezzo_base"):
+        dati_llm["valore_mercato"] = vm
+    return dati_llm
+
+
 def to_asta(sommario: dict, det: Optional[dict], categoria: str) -> dict:
     """
     Costruisce il dict per database.inserisci_asta() da ricerca + dettaglio.
@@ -300,7 +367,7 @@ def to_asta(sommario: dict, det: Optional[dict], categoria: str) -> dict:
         "indirizzo_immobile": ind_lotto.get("via") or bene.get("indirizzo", {}).get("via") or sommario.get("indirizzo", {}).get("via"),
         "tipologia": lotto.get("descTipoCategLotto") or sommario.get("categoriaLotto"),
         "tipologia_immobile": bene.get("descTipologiaBene") or lotto.get("descTipoCategLotto"),
-        "data_asta": (det.get("dataVendita") if det else None) or sommario.get("dataVendita"),
+        "data_asta": _norm_data_asta((det.get("dataVendita") if det else None) or sommario.get("dataVendita")),
         "termine_offerte": termine,
         "descrizione": bene.get("descrizione") or lotto.get("descLotto") or sommario.get("descLotto"),
         # tribunale affidabile dal sommario ("Tribunale di GENOVA"); modalita di
@@ -308,8 +375,9 @@ def to_asta(sommario: dict, det: Optional[dict], categoria: str) -> dict:
         "tribunale": sommario.get("tribunale"),
         "modalita_gara": det.get("descModVendita") if det else None,
         "numero_procedura": _numero_procedura(det, sommario),
+        # la fonte è codificata nel prefisso del codice ("PVP-"): la tabella
+        # `aste` non ha una colonna dedicata.
         "lotto": lotto.get("codLotto") or sommario.get("numeroLotto"),
-        "fonte": "pvp",
         "link_dettaglio": f"{PVP_HOST}/pvp/it/detail_annuncio.page?idAnnuncio={id_vendita}",
         "link_perizia": link_perizia_da_dettaglio(det) if det else None,
         "link_avviso_vendita": _link_per_tipo(det, "AVEND") if det else None,
@@ -365,3 +433,54 @@ def run_scraper_pvp(comuni_per_categoria: dict, codici_esistenti: Optional[set] 
         "codici_per_comune": codici_per_comune,
         "stats": {"attivi_totali": n_tot, "nuovi": n_nuovi},
     }
+
+
+def run_scraper(comuni: list, categoria: Optional[str] = None,
+                codici_esistenti: Optional[set] = None,
+                categoria_localita: Optional[dict] = None,
+                verbose: bool = True) -> dict:
+    """
+    Drop-in compatibile con scraper_api.run_scraper per main.py. Ritorna
+    {"nuovi", "esistenti", "codici_per_comune"}:
+      - nuovi:     list[dict to_asta] per i codici NON già nel DB (con dettaglio)
+      - esistenti: list[{codice, prezzo_base, offerta_minima, comune}] per i codici
+                   già nel DB (solo dal sommario, niente dettaglio → economico),
+                   per il tracking prezzi di database.sincronizza_esistente
+      - codici_per_comune: {comune_salvato: [codici]} con la stessa chiave che
+                   finisce in `comune` (la citta del lotto), così la rilevazione
+                   "spariti" in main.py combacia.
+    `categoria` è ignorato (PVP filtra residenziale internamente); c'è per
+    compatibilità di firma. `categoria_localita` mappa {slug_comune: categoria}.
+    """
+    codici_esistenti = codici_esistenti or set()
+    categoria_localita = categoria_localita or {}
+    oggi = date.today().isoformat()
+    nuovi, esistenti, codici_per_comune = [], [], {}
+
+    for slug in comuni:
+        cat = categoria_localita.get(slug, "citta")
+        try:
+            lotti = ricerca_comune(slug, oggi)
+        except Exception as e:
+            if verbose:
+                print(f"  ⚠️ {slug}: ricerca PVP fallita — {str(e)[:100]}")
+            continue
+        for lotto in lotti:
+            codice = f"PVP-{lotto['id']}"
+            citta = (lotto.get("indirizzo") or {}).get("citta") or slug
+            codici_per_comune.setdefault(citta, []).append(codice)
+            if codice in codici_esistenti:
+                esistenti.append({
+                    "codice": codice,
+                    "prezzo_base": lotto.get("prezzoBaseAsta"),
+                    "offerta_minima": lotto.get("offertaMinima"),
+                    "comune": citta,
+                })
+            else:
+                det = dettaglio(lotto["id"])
+                nuovi.append(to_asta(lotto, det, cat))
+                time.sleep(DELAY_TRA_CHIAMATE)
+        if verbose and lotti:
+            print(f"  ✓ {slug}: {len(lotti)} attivi ({cat})")
+
+    return {"nuovi": nuovi, "esistenti": esistenti, "codici_per_comune": codici_per_comune}
