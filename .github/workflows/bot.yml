@@ -31,7 +31,7 @@ jobs:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          PDF_TEXT_PROVIDER: gemini
-          PDF_SCAN_ANALYSIS_MODE: gemini
+          PDF_TEXT_PROVIDER: groq
+          PDF_SCAN_ANALYSIS_MODE: mistral
           SYNC_TO_SHEETS: "false"   # in cloud i dati vivono su Supabase + dashboard
         run: python main.py --no-sheet
