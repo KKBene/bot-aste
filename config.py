@@ -95,6 +95,12 @@ PDF_SCAN_ANALYSIS_MODE = _env("PDF_SCAN_ANALYSIS_MODE", "gemini").lower()
 # ────────────────────────────────────────────────
 FONTE_ASTE = _env("FONTE_ASTE", "pvp").lower()
 
+# Fonte aggiuntiva: gli IVG pubblicano i nuovi esperimenti di vendita sul
+# proprio calendario e capita che su PVP lo stesso immobile risulti fermo a
+# un'asta già passata. I lotti già presenti da PVP vengono scartati per
+# comune+prezzo (scraper_ivg.possibile_duplicato).
+USA_IVG = _env_bool("USA_IVG", True)
+
 # ────────────────────────────────────────────────
 # GOOGLE SHEETS (export opzionale)
 # ────────────────────────────────────────────────

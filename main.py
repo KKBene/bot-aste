@@ -23,7 +23,7 @@ from pathlib import Path
 
 from config import (
     COMUNI_PER_LOCALITA, SCRAPA_LOCALITA,
-    CATEGORIA_RESIDENZIALE, FONTE_ASTE,
+    CATEGORIA_RESIDENZIALE, FONTE_ASTE, USA_IVG,
     GEMINI_API_KEY, GEMINI_MODEL,
     SCORE_MINIMO_NOTIFICA, TOP_N_NOTIFICA,
     SYNC_TO_SHEETS,
@@ -40,6 +40,7 @@ from pdf_analyzer import PDFAnalyzer
 from scorer import calcola_score
 from market_estimate import stima_lotti
 from geocoding import geocodifica
+from scraper_ivg import run_scraper as run_scraper_ivg
 from notifier import send_start, send_digest, send_error, send_document, send_message, aste_notificabili
 from pdf_report import genera_report_lombardia, genera_report_vacanza, prepara_novita
 
@@ -132,6 +133,26 @@ def main():
         codici_per_comune = risultato["codici_per_comune"]
         print(f"\n  ✅ Nuovi: {len(nuovi_annunci)} | Ri-controllati: {len(esistenti_annunci)}")
 
+        # Fonte aggiuntiva IVG: porta i nuovi esperimenti di vendita che su PVP
+        # risultano ancora fermi a un'asta passata. Scarta ciò che PVP ha già
+        # portato, confrontando comune e importi.
+        if USA_IVG and FONTE_ASTE != "astalegale":
+            try:
+                gia_viste = list(attive.values()) + [
+                    {"comune": a.get("comune"), "prezzo_base": a.get("prezzo_base"),
+                     "offerta_minima": a.get("offerta_minima")} for a in nuovi_annunci]
+                ivg = run_scraper_ivg(comuni, codici_esistenti=codici_esistenti,
+                                      categoria_localita={c: comune_to_cat.get(c, "citta")
+                                                          for c in comuni},
+                                      aste_esistenti=gia_viste, verbose=False)
+                nuovi_annunci += ivg["nuovi"]
+                esistenti_annunci += ivg["esistenti"]
+                for comune, codici in ivg["codici_per_comune"].items():
+                    codici_per_comune.setdefault(comune, []).extend(codici)
+                print(f"  ➕ IVG: {len(ivg['nuovi'])} nuovi | {len(ivg['esistenti'])} già noti")
+            except Exception as e:
+                print(f"  ⚠️ Fonte IVG non disponibile: {str(e)[:120]}")
+
         # ─────────────────────────────────────────────────────
         # STEP 2: Salvataggio + tracking prezzi + annunci spariti
         # ─────────────────────────────────────────────────────
@@ -168,11 +189,17 @@ def main():
             # un comune con lista vuota può essere un fallimento transitorio di
             # rete (cerca_comune ritorna []), non un comune realmente svuotato →
             # evita di marcare per errore tutti gli annunci come "venduti".
+            # Con più fonti attive il confronto va fatto DENTRO la stessa
+            # fonte: se PVP fallisce su un comune mentre IVG risponde, i suoi
+            # lotti verrebbero altrimenti marcati venduti per errore.
             spariti = []
             for codice, info in attive.items():
-                comune = info.get("comune")
-                visti = codici_per_comune.get(comune)
-                if visti and codice not in visti:
+                visti = codici_per_comune.get(info.get("comune"))
+                if not visti:
+                    continue
+                fonte = codice.split("-")[0] if "-" in codice else codice[:1]
+                visti_stessa_fonte = [c for c in visti if c.startswith(fonte)]
+                if visti_stessa_fonte and codice not in visti_stessa_fonte:
                     spariti.append(codice)
             if spariti:
                 sparite_count = db.marca_sparite(spariti)
