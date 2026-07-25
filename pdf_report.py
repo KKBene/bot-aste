@@ -102,7 +102,9 @@ def _card_html(asta: dict, novita: dict) -> str:
     elif asta.get("prezzo_base") and asta.get("offerta_minima") and asta["prezzo_base"] > 0:
         pct = (asta["prezzo_base"] - asta["offerta_minima"]) / asta["prezzo_base"] * 100
         if pct > 0:
-            sconto_html = f'<span class="sconto">-{pct:.0f}%</span>'
+            # senza stima del perito il ribasso è solo offerta-minima vs base:
+            # etichettarlo, altrimenti si confonde con lo sconto sul mercato
+            sconto_html = f'<span class="sconto">-{pct:.0f}% sulla base d\'asta</span>'
     sup = asta.get("superficie_mq")
     mq_html = f'<span class="mq">€{prezzo / sup:,.0f}/mq</span>' if sup and sup > 0 and prezzo > 0 else ""
 
