@@ -110,10 +110,26 @@ def _card_html(asta: dict, novita: dict) -> str:
 
     righe_extra = []
 
+    bd = asta.get("score_breakdown") or {}
+
     if valore_mercato and valore_mercato > 0:
         righe_extra.append(f'<div class="riga">Stima perito: <b>€{valore_mercato:,.0f}</b></div>')
 
-    bd = asta.get("score_breakdown") or {}
+    # Secondo riferimento: quanto chiede oggi il mercato in quel comune. È il
+    # prezzo *richiesto* dell'usato in vendita, quindi un tetto ottimistico —
+    # va detto, altrimenti si scambia per un valore di realizzo.
+    mercato = bd.get("mercato") or {}
+    if mercato.get("valore_stimato"):
+        confronto = ""
+        if valore_mercato and valore_mercato > 0:
+            delta = (mercato["valore_stimato"] - valore_mercato) / valore_mercato * 100
+            if abs(delta) >= 5:
+                confronto = f' <span style="color:#34d399">({delta:+.0f}% vs perito)</span>'
+        righe_extra.append(
+            f'<div class="riga muted">Mercato zona: <b>€{mercato["valore_stimato"]:,.0f}</b>'
+            f'{confronto} — €{mercato["prezzo_mq_mediano"]:,.0f}/mq richiesti '
+            f'su {mercato["campione"]} annunci</div>')
+
     margine_eur, margine_pct = bd.get("margine_eur"), bd.get("margine_pct")
     if margine_eur is not None and margine_pct is not None:
         colore = "#34d399" if margine_pct >= 15 else ("#fbbf24" if margine_pct >= 0 else "#f87171")

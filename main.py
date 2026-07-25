@@ -38,6 +38,7 @@ else:
     from scraper_pvp import run_scraper, merge_deterministici, cerca_perizia_astalegale
 from pdf_analyzer import PDFAnalyzer
 from scorer import calcola_score
+from market_estimate import stima_lotti
 from notifier import send_start, send_digest, send_error, send_document, send_message, aste_notificabili
 from pdf_report import genera_report_lombardia, genera_report_vacanza, prepara_novita
 
@@ -45,6 +46,7 @@ from pdf_report import genera_report_lombardia, genera_report_vacanza, prepara_n
 SKIP_PDF = "--no-pdf" in sys.argv
 SKIP_SHEET = "--no-sheet" in sys.argv
 SKIP_TELEGRAM = "--no-telegram" in sys.argv
+SKIP_MERCATO = "--no-mercato" in sys.argv
 DRY_RUN = "--dry-run" in sys.argv
 
 
@@ -250,9 +252,25 @@ def main():
             aste_da_scorare = db.get_aste_attive_complete()
             print(f"  Aste attive da (ri)scorare: {len(aste_da_scorare)}")
 
+            # Secondo riferimento di valore, indipendente dalla perizia: il €/m²
+            # realmente richiesto oggi in quel comune. La stima del CTU è spesso
+            # conservativa e datata, quindi da sola sottostima il margine.
+            stime_mercato = {}
+            if not SKIP_MERCATO:
+                try:
+                    stime_mercato = stima_lotti(
+                        [a for a in aste_da_scorare if a.get("superficie_mq")],
+                        verbose=False)
+                    print(f"  🏘️  Stime di mercato da comparabili: {len(stime_mercato)}")
+                except Exception as e:
+                    print(f"  ⚠️ Stima di mercato non disponibile: {str(e)[:100]}")
+
             for asta in aste_da_scorare:
                 try:
                     score, breakdown = calcola_score(asta)
+                    mercato = stime_mercato.get(asta["codice"])
+                    if mercato:
+                        breakdown["mercato"] = mercato
                     db.aggiorna_score(asta["codice"], score, breakdown)
                 except Exception as e:
                     print(f"  ❌ Errore scoring {asta.get('codice')}: {e}")
