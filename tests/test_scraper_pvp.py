@@ -345,6 +345,50 @@ class TestMergeDeterministici:
         assert out["valore_mercato"] is None
 
 
+class TestNomeToSlug:
+    @pytest.mark.parametrize("nome,atteso", [
+        ("Venegono Superiore", "venegono-superiore"),
+        ("Cortina d'Ampezzo", "cortina-d-ampezzo"),
+        ("Busto Arsizio", "busto-arsizio"),
+        ("La Spezia", "la-spezia"),
+        (None, ""),
+    ])
+    def test_slug(self, nome, atteso):
+        assert s.nome_to_slug(nome) == atteso
+
+    def test_roundtrip_con_slug_to_nome(self):
+        for slug in ["venegono-superiore", "busto-arsizio", "cortina-d-ampezzo"]:
+            assert s.nome_to_slug(s.slug_to_nome(slug)) == slug
+
+
+class TestCercaPeriziaAstalegale:
+    """Il fallback documenti non deve mai attribuire la perizia di un altro immobile."""
+
+    def _patch(self, monkeypatch, lotti, dettagli):
+        import scraper_api
+        monkeypatch.setattr(scraper_api, "cerca_comune", lambda slug, *a, **k: lotti)
+        monkeypatch.setattr(scraper_api, "arricchisci_dettaglio",
+                            lambda l: dettagli.get(l["codice"], l))
+
+    def test_match_per_prezzo_base(self, monkeypatch):
+        lotti = [{"codice": "B1", "prezzo_base": 22500.0, "indirizzo_immobile": "Via Baracca 8"}]
+        self._patch(monkeypatch, lotti, {"B1": {"codice": "B1", "link_perizia": "http://x/p.pdf"}})
+        assert s.cerca_perizia_astalegale("Venegono Superiore", "Via Baracca 8", 22500) == "http://x/p.pdf"
+
+    def test_niente_match_prezzo_o_indirizzo_diversi(self, monkeypatch):
+        lotti = [{"codice": "B1", "prezzo_base": 99000.0, "indirizzo_immobile": "Via Altrove 1"}]
+        self._patch(monkeypatch, lotti, {"B1": {"codice": "B1", "link_perizia": "http://x/p.pdf"}})
+        assert s.cerca_perizia_astalegale("Venegono Superiore", "Via Baracca 8", 22500) is None
+
+    def test_none_se_comune_vuoto(self):
+        assert s.cerca_perizia_astalegale(None, "Via Baracca 8", 22500) is None
+
+    def test_none_se_lotto_senza_perizia(self, monkeypatch):
+        lotti = [{"codice": "B1", "prezzo_base": 22500.0, "indirizzo_immobile": "Via Baracca 8"}]
+        self._patch(monkeypatch, lotti, {"B1": {"codice": "B1", "link_perizia": None}})
+        assert s.cerca_perizia_astalegale("Venegono Superiore", "Via Baracca 8", 22500) is None
+
+
 class TestDescrizioneDichiaraIntero:
     @pytest.mark.parametrize("desc", [
         "piena proprietà per 1/1 di appartamento ad uso abitazione",

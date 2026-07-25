@@ -377,6 +377,54 @@ def descrizione_dichiara_intero(descrizione: Optional[str]) -> bool:
     return bool(_PIENA_PROPRIETA_RE.search(descrizione))
 
 
+def nome_to_slug(nome: Optional[str]) -> str:
+    """'Venegono Superiore' -> 'venegono-superiore' (inverso di slug_to_nome)."""
+    if not nome:
+        return ""
+    s = unicodedata.normalize("NFKD", nome).encode("ascii", "ignore").decode().lower()
+    s = s.replace("'", " ").replace("’", " ")
+    return "-".join(t for t in re.split(r"[^a-z0-9]+", s) if t)
+
+
+def cerca_perizia_astalegale(comune: Optional[str], indirizzo: Optional[str],
+                             prezzo_base=None) -> Optional[str]:
+    """
+    Cerca su astalegale.net la perizia di un lotto che PVP pubblica senza.
+
+    PVP è la fonte-madre ma non allega sempre la relazione di stima (~1 lotto
+    su 4): senza quella il valore di mercato resta ignoto e l'affare non è
+    valutabile. astalegale ripubblica gli stessi lotti allegando la perizia,
+    quindi vale da fonte documenti di riserva. Il match richiede lo stesso
+    comune e lo stesso prezzo base (o, in mancanza, un indirizzo compatibile),
+    per non attribuire a un immobile la perizia di un altro.
+    """
+    slug = nome_to_slug(comune)
+    if not slug:
+        return None
+    try:
+        from scraper_api import cerca_comune, arricchisci_dettaglio
+        lotti = cerca_comune(slug)
+    except Exception:
+        return None
+
+    pb = _to_float(prezzo_base)
+    chiave = _norm(indirizzo)
+    for lotto in lotti:
+        base_ast = _to_float(lotto.get("prezzo_base"))
+        stesso_prezzo = pb and base_ast and abs(pb - base_ast) / pb < 0.01
+        ind_ast = _norm(lotto.get("indirizzo_immobile"))
+        stesso_indirizzo = bool(chiave and ind_ast) and (chiave in ind_ast or ind_ast in chiave)
+        if not (stesso_prezzo or stesso_indirizzo):
+            continue
+        try:
+            dettaglio_ast = arricchisci_dettaglio(dict(lotto))
+        except Exception:
+            continue
+        if dettaglio_ast.get("link_perizia"):
+            return dettaglio_ast["link_perizia"]
+    return None
+
+
 def merge_deterministici(dati_llm: dict, riga_db: dict) -> dict:
     """
     Fonde l'estrazione LLM con i campi deterministici ufficiali PVP già in DB:

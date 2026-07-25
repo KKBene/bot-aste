@@ -234,6 +234,11 @@ def aggiorna_analisi_pdf(codice: str, dati: dict):
     }).eq("codice", codice).execute()
 
 
+def aggiorna_link_perizia(codice: str, link: str):
+    """Salva una perizia recuperata da una fonte di riserva (vedi main STEP 3)."""
+    get_client().table("aste").update({"link_perizia": link}).eq("codice", codice).execute()
+
+
 def aggiorna_score(codice: str, score: float, breakdown: dict):
     get_client().table("aste").update({
         "score": score,

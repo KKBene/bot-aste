@@ -35,7 +35,7 @@ import database as db
 if FONTE_ASTE == "astalegale":
     from scraper_api import run_scraper
 else:
-    from scraper_pvp import run_scraper, merge_deterministici
+    from scraper_pvp import run_scraper, merge_deterministici, cerca_perizia_astalegale
 from pdf_analyzer import PDFAnalyzer
 from scorer import calcola_score
 from notifier import send_start, send_digest, send_error, send_document, send_message, aste_notificabili
@@ -206,6 +206,19 @@ def main():
             analyzer = PDFAnalyzer(GEMINI_API_KEY, GEMINI_MODEL)
             for asta in aste_da_analizzare:
                 codice = asta["codice"]
+                # PVP non allega sempre la perizia: senza quella il valore di
+                # mercato resta ignoto (l'avviso riporta solo il prezzo base).
+                # Prima di ripiegare sull'avviso, prova a recuperarla da
+                # astalegale, che ripubblica gli stessi lotti coi documenti.
+                if not asta.get("link_perizia") and FONTE_ASTE != "astalegale":
+                    recuperata = cerca_perizia_astalegale(
+                        asta.get("comune"), asta.get("indirizzo_immobile"),
+                        asta.get("prezzo_base"))
+                    if recuperata:
+                        asta["link_perizia"] = recuperata
+                        db.aggiorna_link_perizia(codice, recuperata)
+                        print(f"    🔗 {codice}: perizia recuperata da astalegale")
+
                 url = asta.get("link_perizia") or asta.get("link_avviso_vendita")
                 fonte_doc = "perizia" if asta.get("link_perizia") else "avviso"
                 detail_url = asta.get("link_dettaglio")
