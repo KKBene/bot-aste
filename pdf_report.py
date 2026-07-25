@@ -18,6 +18,7 @@ momento del render (richiede rete, disponibile sia in locale che nel
 job cloud).
 """
 import re
+import urllib.parse
 from pathlib import Path
 from datetime import datetime
 from html import escape as _esc
@@ -169,9 +170,18 @@ def _card_html(asta: dict, novita: dict) -> str:
     link_parts = []
     if asta.get("link_dettaglio"):
         link_parts.append(f'<a href="{_esc(asta["link_dettaglio"])}">Vedi annuncio →</a>')
+    # Mappa: coordinate se ci sono, altrimenti ricerca per indirizzo+comune —
+    # PVP fornisce le coordinate solo per una parte dei lotti e senza fallback
+    # il link sparirebbe dalla maggior parte delle schede.
     lat, lng = asta.get("posizione_lat"), asta.get("posizione_lng")
     if lat and lng:
         link_parts.append(f'<a href="https://www.google.com/maps?q={lat},{lng}">Mappa →</a>')
+    else:
+        indirizzo = " ".join(p for p in (asta.get("indirizzo_immobile"),
+                                         asta.get("comune")) if p)
+        if indirizzo.strip():
+            q = urllib.parse.quote_plus(indirizzo)
+            link_parts.append(f'<a href="https://www.google.com/maps/search/?api=1&amp;query={q}">Mappa →</a>')
 
     foto_url = asta.get("immagine_url")
     foto_html = (

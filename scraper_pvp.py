@@ -308,6 +308,75 @@ def _norm_data_asta(v: Optional[str]) -> Optional[str]:
     return v
 
 
+# Un prezzo base d'asta sta normalmente sotto la stima del perito (o poco
+# sopra al primo incanto). Se lo supera di oltre 3x, la "stima" non è una
+# stima: l'LLM ha pescato un altro importo dalla perizia (una spesa, un valore
+# parziale, la quota di un altro lotto). Casi reali osservati: tre lotti da
+# 102-335k con la stessa stima di 15.198 €.
+_RAPPORTO_MAX_BASE_SU_STIMA = 3.0
+
+
+def valore_mercato_plausibile(valore_mercato, prezzo_base,
+                              da_avviso: bool = False) -> bool:
+    """
+    False se la stima è incompatibile col prezzo base al punto da essere quasi
+    certamente un errore di estrazione. Meglio nessun valore che uno falso: uno
+    sconto inventato falsa lo score e fa sparire dal report un'opportunità buona
+    (falso negativo), che è il danno peggiore per chi cerca occasioni.
+
+    `da_avviso=True` quando il dato viene dall'avviso di vendita invece che
+    dalla perizia: l'avviso riporta il prezzo base ma non la stima del perito,
+    quindi una "stima" identica al prezzo base è quasi sempre il prezzo base
+    riletto per errore, non una valutazione.
+    """
+    vm, pb = _to_float(valore_mercato), _to_float(prezzo_base)
+    if not vm or vm <= 0:
+        return False
+    if not pb or pb <= 0:
+        return True          # senza prezzo base non abbiamo modo di giudicare
+    if da_avviso and abs(vm - pb) / pb < 0.02:
+        return False
+    return pb / vm <= _RAPPORTO_MAX_BASE_SU_STIMA
+
+
+# La descrizione ufficiale del lotto dichiara spesso in modo esplicito che la
+# vendita riguarda l'intero. Serve da arbitro contro i falsi positivi della
+# regex sulla quota, che pesca frazioni da contesti estranei (piani, mappali,
+# quote di altri comproprietari citate in perizia) e fa scattare il
+# moltiplicatore 0.45 dello scorer su immobili in piena proprietà.
+_PIENA_PROPRIETA_RE = re.compile(
+    r"piena\s+(?:ed?\s+)?intera\s+propriet|"
+    r"piena\s+ed\s+intera|"
+    r"per\s+l['’]intero\b|"
+    r"propriet[àa]\s+(?:per|di)\s+1/1\b|"
+    r"\b1/1\s+di\s+piena\s+propriet|"
+    r"\b1000/1000\b",
+    re.I,
+)
+# Una frazione < 1 esplicitamente legata alla proprietà smentisce l'intero.
+_QUOTA_FRAZIONE_RE = re.compile(
+    r"(?:quota|propriet[àa])\s+(?:di\s+|per\s+(?:la\s+quota\s+di\s+)?)?(\d{1,4})\s*/\s*(\d{1,4})",
+    re.I,
+)
+
+
+def descrizione_dichiara_intero(descrizione: Optional[str]) -> bool:
+    """
+    True se la descrizione del lotto dichiara la vendita dell'intero. Ignora
+    le frazioni che valgono 1 (1/1, 1000/1000) e si arrende se compare una
+    frazione < 1 riferita alla proprietà (lì la quota frazionata è reale).
+    """
+    if not descrizione:
+        return False
+    for num, den in _QUOTA_FRAZIONE_RE.findall(descrizione):
+        try:
+            if int(den) and int(num) / int(den) < 1:
+                return False
+        except (ValueError, ZeroDivisionError):
+            continue
+    return bool(_PIENA_PROPRIETA_RE.search(descrizione))
+
+
 def merge_deterministici(dati_llm: dict, riga_db: dict) -> dict:
     """
     Fonde l'estrazione LLM con i campi deterministici ufficiali PVP già in DB:
@@ -315,7 +384,8 @@ def merge_deterministici(dati_llm: dict, riga_db: dict) -> dict:
       - superficie_mq / stato_occupazione: si preservano se presenti in DB.
       - valore_mercato: si preserva SOLO se è una stima vera, cioè diversa dal
         prezzo base (impoStima==base è spesso un placeholder → lì la perizia
-        analizzata dall'LLM è più affidabile).
+        analizzata dall'LLM è più affidabile); e in ogni caso il valore finale
+        viene scartato se implausibile rispetto al prezzo base.
     Per fonti senza dati deterministici (valori None) è un no-op sicuro.
     Muta e ritorna `dati_llm`.
     """
@@ -325,6 +395,19 @@ def merge_deterministici(dati_llm: dict, riga_db: dict) -> dict:
     vm = riga_db.get("valore_mercato")
     if vm is not None and vm != riga_db.get("prezzo_base"):
         dati_llm["valore_mercato"] = vm
+    # scarta la stima (da qualunque fonte provenga) se non regge il confronto
+    # col prezzo base: un dato falso è peggio di un dato mancante. Se il
+    # documento analizzato era l'avviso (nessuna perizia), il criterio è più
+    # severo: l'avviso non contiene la stima del perito.
+    da_avviso = not riga_db.get("link_perizia")
+    if not valore_mercato_plausibile(dati_llm.get("valore_mercato"),
+                                     riga_db.get("prezzo_base"), da_avviso):
+        dati_llm["valore_mercato"] = None
+    # quota: la descrizione ufficiale batte la regex quando dichiara l'intero
+    quota = (dati_llm.get("quota_proprieta") or "")
+    if quota and not quota.startswith("1/1") and \
+            descrizione_dichiara_intero(riga_db.get("descrizione")):
+        dati_llm["quota_proprieta"] = "1/1 piena proprietà"
     return dati_llm
 
 

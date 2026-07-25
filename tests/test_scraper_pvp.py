@@ -323,6 +323,7 @@ class TestMergeDeterministici:
         """impoStima==base è un placeholder: lì la perizia (LLM) è più affidabile."""
         llm = {"valore_mercato": 79500}
         riga = {"valore_mercato": 80000, "prezzo_base": 80000,
+                "link_perizia": "http://x/perizia.pdf",   # il valore LLM viene dalla perizia
                 "superficie_mq": None, "stato_occupazione": None}
         out = s.merge_deterministici(llm, riga)
         assert out["valore_mercato"] == 79500         # LLM vince
@@ -334,3 +335,79 @@ class TestMergeDeterministici:
                 "valore_mercato": None, "prezzo_base": 50000}
         out = s.merge_deterministici(dict(llm), riga)
         assert out == llm
+
+    def test_scarta_stima_implausibile(self):
+        """Stima 15k su un immobile a 335k: errore di estrazione → meglio None."""
+        llm = {"valore_mercato": 15198}
+        riga = {"prezzo_base": 335000, "valore_mercato": None,
+                "superficie_mq": None, "stato_occupazione": None}
+        out = s.merge_deterministici(llm, riga)
+        assert out["valore_mercato"] is None
+
+
+class TestDescrizioneDichiaraIntero:
+    @pytest.mark.parametrize("desc", [
+        "piena proprietà per 1/1 di appartamento ad uso abitazione",
+        "per la piena ed intera proprietà: appartamento (monolocale)",
+        "piena ed intera proprietà di appartamento a Vernazza",
+        "per l'intero abitazione residenziale su due piani",
+        "piena proprietà per la quota di 1000/1000 delle seguenti unità",
+    ])
+    def test_riconosce_intero(self, desc):
+        assert s.descrizione_dichiara_intero(desc) is True
+
+    @pytest.mark.parametrize("desc", [
+        "piena proprietà per la quota di 1/2 di appartamento",   # frazione vera
+        "quota di 4/27 di villetta unifamiliare",
+        "appartamento al piano primo, composto da tre locali",   # non dichiara nulla
+        "",
+        None,
+    ])
+    def test_non_dichiara_intero(self, desc):
+        assert s.descrizione_dichiara_intero(desc) is False
+
+
+class TestQuotaMergeArbitro:
+    def test_descrizione_intera_corregge_falso_positivo(self):
+        """Regex dice 1/2 ma la descrizione ufficiale dichiara 1/1: vince la descrizione."""
+        llm = {"quota_proprieta": "1/2 piena proprietà"}
+        riga = {"descrizione": "piena proprietà per 1/1 di appartamento ad uso abitazione",
+                "prezzo_base": 100000, "valore_mercato": None,
+                "superficie_mq": None, "stato_occupazione": None}
+        out = s.merge_deterministici(llm, riga)
+        assert out["quota_proprieta"] == "1/1 piena proprietà"
+
+    def test_quota_frazionata_reale_resta(self):
+        llm = {"quota_proprieta": "1/2 piena proprietà"}
+        riga = {"descrizione": "piena proprietà per la quota di 1/2 di appartamento",
+                "prezzo_base": 100000, "valore_mercato": None,
+                "superficie_mq": None, "stato_occupazione": None}
+        out = s.merge_deterministici(llm, riga)
+        assert out["quota_proprieta"] == "1/2 piena proprietà"
+
+
+class TestValoreMercatoPlausibile:
+    @pytest.mark.parametrize("vm,pb,atteso", [
+        (130000, 100000, True),    # stima sopra il prezzo: caso normale
+        (100000, 120000, True),    # prezzo poco sopra la stima: plausibile
+        (73968, 131990, True),     # 1.8x: borderline ma realistico
+        (15198, 335000, False),    # 22x: errore di estrazione
+        (15198, 102000, False),    # 6.7x: errore di estrazione
+        (None, 100000, False),     # nessuna stima
+        (0, 100000, False),        # zero non è una stima
+        (50000, None, True),       # senza prezzo base non possiamo giudicare
+    ])
+    def test_plausibilita(self, vm, pb, atteso):
+        assert s.valore_mercato_plausibile(vm, pb) is atteso
+
+    def test_da_avviso_stima_uguale_al_base_e_inaffidabile(self):
+        """L'avviso non riporta la stima: vm==base è il prezzo base riletto."""
+        assert s.valore_mercato_plausibile(22500, 22500, da_avviso=True) is False
+        # con la perizia invece può essere un primo incanto legittimo
+        assert s.valore_mercato_plausibile(22500, 22500, da_avviso=False) is True
+
+    def test_merge_scarta_stima_da_avviso(self):
+        llm = {"valore_mercato": 22500}
+        riga = {"prezzo_base": 22500, "valore_mercato": None, "link_perizia": None,
+                "superficie_mq": None, "stato_occupazione": None, "descrizione": ""}
+        assert s.merge_deterministici(llm, riga)["valore_mercato"] is None
