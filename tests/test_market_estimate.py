@@ -12,9 +12,9 @@ import market_estimate as me
 
 
 def annuncio(prezzo, superficie, tipologia="Trilocale", citta="Gallarate",
-             condizione="Buono / Abitabile"):
+             condizione="Buono / Abitabile", lat=None, lng=None):
     return {"prezzo": prezzo, "superficie": superficie, "tipologia": tipologia,
-            "citta": citta, "condizione": condizione}
+            "citta": citta, "condizione": condizione, "lat": lat, "lng": lng}
 
 
 class TestComuneToSlug:
@@ -117,6 +117,53 @@ class TestFiltroCondizione:
         zona = me.prezzo_mq_zona("Gallarate", 100, annunci, stato="PESSIMO")
         assert zona["campione"] == 5
         assert zona["prezzo_mq_mediano"] == 800
+
+
+class TestFiltroVicinato:
+    """Su una città grande la mediana comunale mescola quartieri incomparabili."""
+
+    # Genova: Albaro (caro) vs Certosa (economico), ~6 km di distanza
+    ALBARO = (44.3900, 8.9700)
+    CERTOSA = (44.4300, 8.8900)
+
+    def _mercato(self):
+        return ([annuncio(400_000, 100, citta="Genova", lat=44.3905, lng=8.9705) for _ in range(6)] +
+                [annuncio(120_000, 100, citta="Genova", lat=44.4305, lng=8.8905) for _ in range(6)])
+
+    def test_usa_solo_il_vicinato_del_lotto(self):
+        zona = me.prezzo_mq_zona("Genova", None, self._mercato(), coord=self.ALBARO)
+        assert zona["prezzo_mq_mediano"] == 4000        # non la mediana mista
+        assert zona["campione"] == 6
+        assert zona["base_confronto"].startswith("in zona")
+
+    def test_quartiere_economico(self):
+        zona = me.prezzo_mq_zona("Genova", None, self._mercato(), coord=self.CERTOSA)
+        assert zona["prezzo_mq_mediano"] == 1200
+
+    def test_senza_coordinate_usa_tutto_il_comune(self):
+        zona = me.prezzo_mq_zona("Genova", None, self._mercato(), coord=None)
+        assert zona["campione"] == 12
+        assert not zona["base_confronto"].startswith("in zona")
+
+    def test_allarga_al_comune_se_il_vicinato_e_vuoto(self):
+        """Nessun annuncio vicino: meglio la media comunale che nessuna stima."""
+        lontani = [annuncio(200_000, 100, citta="Genova", lat=44.50, lng=9.20) for _ in range(6)]
+        zona = me.prezzo_mq_zona("Genova", None, lontani, coord=self.ALBARO)
+        assert zona is not None
+        assert not zona["base_confronto"].startswith("in zona")
+
+
+class TestDistanzaKm:
+    def test_distanza_nota(self):
+        # Albaro -> Certosa, circa 6-7 km
+        d = me.distanza_km(44.3900, 8.9700, 44.4300, 8.8900)
+        assert 5.0 < d < 9.0
+
+    def test_stesso_punto(self):
+        assert me.distanza_km(44.39, 8.97, 44.39, 8.97) == pytest.approx(0, abs=0.01)
+
+    def test_none_se_mancano_coordinate(self):
+        assert me.distanza_km(44.39, 8.97, None, 8.97) is None
 
 
 class TestStimaDaComparabili:

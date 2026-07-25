@@ -18,6 +18,7 @@ richiesta: va letto come tetto ottimistico, non come prezzo di realizzo.
 from __future__ import annotations
 
 import json
+import math
 import re
 import statistics
 import time
@@ -41,6 +42,10 @@ _TIPOLOGIE_ESCLUSE = {
 # Fascia di superficie considerata comparabile: ±50% di quella del lotto.
 _TOLLERANZA_SUPERFICIE = 0.5
 MIN_COMPARABILI = 5
+# Vicinato: su una città grande la mediana comunale mescola quartieri con
+# prezzi molto diversi (a Genova, Albaro e Certosa), quindi quando il lotto ha
+# coordinate si guarda prima chi gli sta davvero vicino.
+RAGGIO_VICINATO_KM = 2.0
 DELAY_TRA_RICHIESTE = 1.5
 
 # Confrontare un immobile da ristrutturare con annunci di ristrutturati gonfia
@@ -140,8 +145,34 @@ def scarica_annunci(comune: str, timeout: int = 25) -> list[dict]:
             "tipologia": ((proprieta.get("typology") or {}).get("name") or ""),
             "citta": ((proprieta.get("location") or {}).get("city") or ""),
             "condizione": proprieta.get("ga4Condition") or "",
+            "lat": (proprieta.get("location") or {}).get("latitude"),
+            "lng": (proprieta.get("location") or {}).get("longitude"),
+            "microzona": (proprieta.get("location") or {}).get("microzone") or "",
         })
     return annunci
+
+
+def distanza_km(lat1, lng1, lat2, lng2) -> Optional[float]:
+    """Distanza in linea d'aria (haversine) fra due punti, None se mancano dati."""
+    if None in (lat1, lng1, lat2, lng2):
+        return None
+    try:
+        lat1, lng1, lat2, lng2 = map(float, (lat1, lng1, lat2, lng2))
+    except (TypeError, ValueError):
+        return None
+    r = 6371.0
+    dlat, dlng = math.radians(lat2 - lat1), math.radians(lng2 - lng1)
+    a = (math.sin(dlat / 2) ** 2
+         + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2)
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def _entro_raggio(annuncio: dict, coord: Optional[tuple], raggio_km: Optional[float]) -> bool:
+    """L'annuncio è abbastanza vicino al lotto? Senza coordinate non filtra."""
+    if not raggio_km or not coord:
+        return True
+    d = distanza_km(coord[0], coord[1], annuncio.get("lat"), annuncio.get("lng"))
+    return d is not None and d <= raggio_km
 
 
 def _condizione_compatibile(annuncio: dict, stato: Optional[str]) -> bool:
@@ -181,27 +212,40 @@ def _comparabile(annuncio: dict, superficie_target: Optional[float],
 
 def prezzo_mq_zona(comune: str, superficie_target: Optional[float] = None,
                    annunci: Optional[list[dict]] = None,
-                   stato: Optional[str] = None) -> Optional[dict]:
+                   stato: Optional[str] = None,
+                   coord: Optional[tuple] = None) -> Optional[dict]:
     """
-    Mediana del €/m² richiesto nel comune, sui soli annunci comparabili.
+    Mediana del €/m² richiesto, sui soli annunci comparabili.
 
-    I criteri si allentano per gradi finché il campione non è abbastanza
-    grande — prima si molla la fascia di superficie, poi lo stato — e il
-    livello raggiunto viene riportato in `base_confronto`, così chi legge sa
-    se sta guardando immobili davvero simili o solo la media della zona.
-    Ritorna None se i comparabili non bastano a dire qualcosa di sensato.
+    Se il lotto ha coordinate si parte dal vicinato (`RAGGIO_VICINATO_KM`):
+    su una città grande la mediana comunale mescola quartieri con prezzi
+    molto diversi e non dice nulla di utile. I criteri si allentano per gradi
+    — prima il raggio, poi la superficie, poi lo stato — e il livello
+    raggiunto viene riportato in `base_confronto`, così chi legge sa se sta
+    guardando immobili davvero simili o solo la media del comune.
     """
     annunci = scarica_annunci(comune) if annunci is None else annunci
+    vicino = RAGGIO_VICINATO_KM if coord else None
 
     tentativi = [
-        ("stato e superficie simili", superficie_target, stato),
-        ("stato simile", None, stato),
-        ("superficie simile", superficie_target, None),
-        ("zona", None, None),
+        ("in zona, stato e superficie simili", vicino, superficie_target, stato),
+        ("in zona, stato simile", vicino, None, stato),
+        ("in zona", vicino, None, None),
+        ("stato e superficie simili", None, superficie_target, stato),
+        ("stato simile", None, None, stato),
+        ("superficie simile", None, superficie_target, None),
+        ("comune", None, None, None),
     ]
-    for etichetta, sup, st in tentativi:
+    for etichetta, raggio, sup, st in tentativi:
+        # senza coordinate del lotto il filtro per vicinato non è applicabile:
+        # saltare quei tentativi, altrimenti restituirebbero l'etichetta
+        # "in zona" pur avendo confrontato tutto il comune.
+        if etichetta.startswith("in zona") and not vicino:
+            continue
         validi = [a for a in annunci
-                  if _comparabile(a, sup, comune) and _condizione_compatibile(a, st)]
+                  if _comparabile(a, sup, comune)
+                  and _condizione_compatibile(a, st)
+                  and _entro_raggio(a, coord, raggio)]
         if len(validi) >= MIN_COMPARABILI:
             prezzi_mq = sorted(a["prezzo"] / a["superficie"] for a in validi)
             return {
@@ -216,7 +260,8 @@ def prezzo_mq_zona(comune: str, superficie_target: Optional[float] = None,
 
 def stima_da_comparabili(comune: str, superficie_mq: Optional[float],
                          annunci: Optional[list[dict]] = None,
-                         stato: Optional[str] = None) -> Optional[dict]:
+                         stato: Optional[str] = None,
+                         coord: Optional[tuple] = None) -> Optional[dict]:
     """
     Valore di mercato stimato = €/m² mediano della zona × superficie del lotto.
     Serve la superficie: senza, il €/m² non è convertibile in un valore.
@@ -226,7 +271,7 @@ def stima_da_comparabili(comune: str, superficie_mq: Optional[float],
     """
     if not superficie_mq or superficie_mq <= 0:
         return None
-    zona = prezzo_mq_zona(comune, superficie_mq, annunci, stato)
+    zona = prezzo_mq_zona(comune, superficie_mq, annunci, stato, coord)
     if not zona:
         return None
 
@@ -264,8 +309,10 @@ def stima_lotti(lotti: list[dict], verbose: bool = True) -> dict:
         if verbose:
             print(f"  {comune}: {len(annunci)} annunci di mercato")
         for lotto in gruppo:
-            stima = stima_da_comparabili(comune, lotto.get("superficie_mq"),
-                                         annunci, lotto.get("stato_manutentivo"))
+            lat, lng = lotto.get("posizione_lat"), lotto.get("posizione_lng")
+            stima = stima_da_comparabili(
+                comune, lotto.get("superficie_mq"), annunci,
+                lotto.get("stato_manutentivo"), (lat, lng) if lat and lng else None)
             if stima:
                 stime[lotto["codice"]] = stima
         time.sleep(DELAY_TRA_RICHIESTE)
