@@ -10,7 +10,10 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Il run completo ora include, oltre allo scraping: fonte IVG, geocoding
+    # degli indirizzi nuovi e stima di mercato (più pagine di annunci per
+    # comune). Margine ampio per non far scadere il job a metà.
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
 
