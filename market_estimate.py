@@ -43,6 +43,30 @@ _TOLLERANZA_SUPERFICIE = 0.5
 MIN_COMPARABILI = 5
 DELAY_TRA_RICHIESTE = 1.5
 
+# Confrontare un immobile da ristrutturare con annunci di ristrutturati gonfia
+# la stima anche del doppio: lo stato di conservazione pesa quanto la zona.
+# Mappa lo `stato_manutentivo` della perizia sulle condizioni dichiarate negli
+# annunci (campo ga4Condition), tenendo le fasce adiacenti per non ridurre
+# troppo il campione.
+_CONDIZIONI_COMPATIBILI = {
+    "OTTIMO":   {"ottimo / ristrutturato", "nuovo / in costruzione"},
+    "BUONO":    {"buono / abitabile", "ottimo / ristrutturato"},
+    "MEDIOCRE": {"buono / abitabile", "da ristrutturare"},
+    "PESSIMO":  {"da ristrutturare"},
+    "RUDERE":   {"da ristrutturare"},
+}
+
+# Quando in zona non ci sono abbastanza annunci nello stesso stato, il
+# riferimento resta quello di immobili mediamente abitabili. Questi fattori
+# lo riportano verso il basso per gli immobili malmessi: sono prudenziali e
+# volutamente grossolani, servono a non spacciare per valore di un rudere il
+# prezzo di una casa abitabile. Il report dichiara sempre quando è applicato.
+_SCONTO_STATO_NON_FILTRATO = {
+    "MEDIOCRE": 0.85,
+    "PESSIMO": 0.70,
+    "RUDERE": 0.55,
+}
+
 
 def _norm(s: Optional[str]) -> str:
     if not s:
@@ -115,8 +139,22 @@ def scarica_annunci(comune: str, timeout: int = 25) -> list[dict]:
             "superficie": _superficie(proprieta.get("surface")),
             "tipologia": ((proprieta.get("typology") or {}).get("name") or ""),
             "citta": ((proprieta.get("location") or {}).get("city") or ""),
+            "condizione": proprieta.get("ga4Condition") or "",
         })
     return annunci
+
+
+def _condizione_compatibile(annuncio: dict, stato: Optional[str]) -> bool:
+    """L'annuncio è in uno stato di conservazione confrontabile col lotto?"""
+    if not stato:
+        return True                       # stato del lotto ignoto: non filtrare
+    ammesse = _CONDIZIONI_COMPATIBILI.get(str(stato).upper().strip())
+    if not ammesse:
+        return True
+    cond = _norm(annuncio.get("condizione"))
+    if not cond:
+        return False                      # senza condizione dichiarata non è confrontabile
+    return cond in ammesse
 
 
 def _comparabile(annuncio: dict, superficie_target: Optional[float],
@@ -142,40 +180,71 @@ def _comparabile(annuncio: dict, superficie_target: Optional[float],
 
 
 def prezzo_mq_zona(comune: str, superficie_target: Optional[float] = None,
-                   annunci: Optional[list[dict]] = None) -> Optional[dict]:
+                   annunci: Optional[list[dict]] = None,
+                   stato: Optional[str] = None) -> Optional[dict]:
     """
     Mediana del €/m² richiesto nel comune, sui soli annunci comparabili.
+
+    I criteri si allentano per gradi finché il campione non è abbastanza
+    grande — prima si molla la fascia di superficie, poi lo stato — e il
+    livello raggiunto viene riportato in `base_confronto`, così chi legge sa
+    se sta guardando immobili davvero simili o solo la media della zona.
     Ritorna None se i comparabili non bastano a dire qualcosa di sensato.
     """
     annunci = scarica_annunci(comune) if annunci is None else annunci
-    validi = [a for a in annunci if _comparabile(a, superficie_target, comune)]
-    # se la fascia di superficie è troppo stretta, riprova senza quel vincolo
-    if len(validi) < MIN_COMPARABILI and superficie_target:
-        validi = [a for a in annunci if _comparabile(a, None, comune)]
-    if len(validi) < MIN_COMPARABILI:
-        return None
-    prezzi_mq = sorted(a["prezzo"] / a["superficie"] for a in validi)
-    return {
-        "prezzo_mq_mediano": round(statistics.median(prezzi_mq)),
-        "campione": len(validi),
-        "prezzo_mq_min": round(prezzi_mq[0]),
-        "prezzo_mq_max": round(prezzi_mq[-1]),
-    }
+
+    tentativi = [
+        ("stato e superficie simili", superficie_target, stato),
+        ("stato simile", None, stato),
+        ("superficie simile", superficie_target, None),
+        ("zona", None, None),
+    ]
+    for etichetta, sup, st in tentativi:
+        validi = [a for a in annunci
+                  if _comparabile(a, sup, comune) and _condizione_compatibile(a, st)]
+        if len(validi) >= MIN_COMPARABILI:
+            prezzi_mq = sorted(a["prezzo"] / a["superficie"] for a in validi)
+            return {
+                "prezzo_mq_mediano": round(statistics.median(prezzi_mq)),
+                "campione": len(validi),
+                "prezzo_mq_min": round(prezzi_mq[0]),
+                "prezzo_mq_max": round(prezzi_mq[-1]),
+                "base_confronto": etichetta,
+            }
+    return None
 
 
 def stima_da_comparabili(comune: str, superficie_mq: Optional[float],
-                         annunci: Optional[list[dict]] = None) -> Optional[dict]:
+                         annunci: Optional[list[dict]] = None,
+                         stato: Optional[str] = None) -> Optional[dict]:
     """
     Valore di mercato stimato = €/m² mediano della zona × superficie del lotto.
     Serve la superficie: senza, il €/m² non è convertibile in un valore.
-    Ritorna {valore_stimato, prezzo_mq_mediano, campione, ...} o None.
+    `stato` è lo stato_manutentivo del lotto: senza, la stima confronta con
+    immobili di qualunque condizione e tende a sovrastimare un immobile da
+    ristrutturare. Ritorna {valore_stimato, prezzo_mq_mediano, campione, ...}.
     """
     if not superficie_mq or superficie_mq <= 0:
         return None
-    zona = prezzo_mq_zona(comune, superficie_mq, annunci)
+    zona = prezzo_mq_zona(comune, superficie_mq, annunci, stato)
     if not zona:
         return None
-    return {"valore_stimato": round(zona["prezzo_mq_mediano"] * superficie_mq), **zona}
+
+    valore = zona["prezzo_mq_mediano"] * superficie_mq
+    # Se non siamo riusciti a filtrare per stato (comparabili insufficienti),
+    # il riferimento resta quello di immobili mediamente abitabili: applicarlo
+    # tale e quale a un immobile malmesso lo sopravvaluta. Meglio uno sconto
+    # prudenziale, dichiarato, che una cifra gonfiata.
+    sconto = None
+    if stato and "stato" not in (zona.get("base_confronto") or ""):
+        sconto = _SCONTO_STATO_NON_FILTRATO.get(str(stato).upper().strip())
+        if sconto:
+            valore *= sconto
+
+    risultato = {"valore_stimato": round(valore), **zona}
+    if sconto:
+        risultato["sconto_stato"] = sconto
+    return risultato
 
 
 def stima_lotti(lotti: list[dict], verbose: bool = True) -> dict:
@@ -195,7 +264,8 @@ def stima_lotti(lotti: list[dict], verbose: bool = True) -> dict:
         if verbose:
             print(f"  {comune}: {len(annunci)} annunci di mercato")
         for lotto in gruppo:
-            stima = stima_da_comparabili(comune, lotto.get("superficie_mq"), annunci)
+            stima = stima_da_comparabili(comune, lotto.get("superficie_mq"),
+                                         annunci, lotto.get("stato_manutentivo"))
             if stima:
                 stime[lotto["codice"]] = stima
         time.sleep(DELAY_TRA_RICHIESTE)

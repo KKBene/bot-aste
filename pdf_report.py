@@ -125,10 +125,15 @@ def _card_html(asta: dict, novita: dict) -> str:
             delta = (mercato["valore_stimato"] - valore_mercato) / valore_mercato * 100
             if abs(delta) >= 5:
                 confronto = f' <span style="color:#34d399">({delta:+.0f}% vs perito)</span>'
+        base = mercato.get("base_confronto")
+        base_txt = f" · {_esc(base)}" if base else ""
+        if mercato.get("sconto_stato"):
+            taglio = round((1 - mercato["sconto_stato"]) * 100)
+            base_txt += f", −{taglio}% per stato"
         righe_extra.append(
             f'<div class="riga muted">Mercato zona: <b>€{mercato["valore_stimato"]:,.0f}</b>'
             f'{confronto} — €{mercato["prezzo_mq_mediano"]:,.0f}/mq richiesti '
-            f'su {mercato["campione"]} annunci</div>')
+            f'su {mercato["campione"]} annunci{base_txt}</div>')
 
     margine_eur, margine_pct = bd.get("margine_eur"), bd.get("margine_pct")
     if margine_eur is not None and margine_pct is not None:

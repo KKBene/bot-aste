@@ -11,9 +11,10 @@ import pytest
 import market_estimate as me
 
 
-def annuncio(prezzo, superficie, tipologia="Trilocale", citta="Gallarate"):
-    return {"prezzo": prezzo, "superficie": superficie,
-            "tipologia": tipologia, "citta": citta}
+def annuncio(prezzo, superficie, tipologia="Trilocale", citta="Gallarate",
+             condizione="Buono / Abitabile"):
+    return {"prezzo": prezzo, "superficie": superficie, "tipologia": tipologia,
+            "citta": citta, "condizione": condizione}
 
 
 class TestComuneToSlug:
@@ -82,6 +83,42 @@ class TestPrezzoMqZona:
         assert zona is not None and zona["campione"] == 6
 
 
+class TestFiltroCondizione:
+    """Un immobile da ristrutturare non va confrontato con dei ristrutturati."""
+
+    def _mercato(self):
+        # ristrutturati cari + da ristrutturare economici, stessa superficie
+        return ([annuncio(200_000, 100, condizione="Ottimo / Ristrutturato") for _ in range(6)] +
+                [annuncio(80_000, 100, condizione="Da ristrutturare") for _ in range(6)])
+
+    def test_rudere_confrontato_coi_da_ristrutturare(self):
+        zona = me.prezzo_mq_zona("Gallarate", 100, self._mercato(), stato="RUDERE")
+        assert zona["prezzo_mq_mediano"] == 800          # non 2000 dei ristrutturati
+        assert zona["base_confronto"] == "stato e superficie simili"
+
+    def test_ottimo_confrontato_coi_ristrutturati(self):
+        zona = me.prezzo_mq_zona("Gallarate", 100, self._mercato(), stato="OTTIMO")
+        assert zona["prezzo_mq_mediano"] == 2000
+
+    def test_senza_stato_usa_tutto_il_mercato(self):
+        zona = me.prezzo_mq_zona("Gallarate", 100, self._mercato(), stato=None)
+        assert zona["campione"] == 12
+
+    def test_fallback_progressivo_riporta_la_base(self):
+        """Se lo stato non trova abbastanza comparabili si allarga, ma lo si dichiara."""
+        annunci = [annuncio(100_000, 100, condizione="Ottimo / Ristrutturato") for _ in range(6)]
+        zona = me.prezzo_mq_zona("Gallarate", 100, annunci, stato="RUDERE")
+        assert zona is not None
+        assert zona["base_confronto"] == "superficie simile"   # stato mollato
+
+    def test_annuncio_senza_condizione_escluso_se_filtriamo_per_stato(self):
+        annunci = ([annuncio(80_000, 100, condizione="Da ristrutturare") for _ in range(5)] +
+                   [annuncio(500_000, 100, condizione="") for _ in range(5)])
+        zona = me.prezzo_mq_zona("Gallarate", 100, annunci, stato="PESSIMO")
+        assert zona["campione"] == 5
+        assert zona["prezzo_mq_mediano"] == 800
+
+
 class TestStimaDaComparabili:
     def test_valore_stimato(self):
         annunci = [annuncio(100_000, 100) for _ in range(6)]    # 1000 €/mq
@@ -96,3 +133,21 @@ class TestStimaDaComparabili:
 
     def test_none_se_zona_non_valutabile(self):
         assert me.stima_da_comparabili("Gallarate", 80, [annuncio(100_000, 100)]) is None
+
+    def test_sconto_prudenziale_se_stato_non_filtrabile(self):
+        """Nessun 'da ristrutturare' in zona: il valore va corretto al ribasso."""
+        annunci = [annuncio(100_000, 100, condizione="Ottimo / Ristrutturato") for _ in range(6)]
+        stima = me.stima_da_comparabili("Gallarate", 100, annunci, stato="RUDERE")
+        assert stima["sconto_stato"] == 0.55
+        assert stima["valore_stimato"] == 55_000        # 100.000 × 0.55
+
+    def test_nessuno_sconto_se_lo_stato_e_stato_filtrato(self):
+        annunci = [annuncio(80_000, 100, condizione="Da ristrutturare") for _ in range(6)]
+        stima = me.stima_da_comparabili("Gallarate", 100, annunci, stato="RUDERE")
+        assert "sconto_stato" not in stima
+        assert stima["valore_stimato"] == 80_000
+
+    def test_nessuno_sconto_per_immobili_in_buono_stato(self):
+        annunci = [annuncio(100_000, 100, condizione="Nuovo / In costruzione") for _ in range(6)]
+        stima = me.stima_da_comparabili("Gallarate", 100, annunci, stato="BUONO")
+        assert "sconto_stato" not in stima
