@@ -153,6 +153,39 @@ class TestFiltroVicinato:
         assert not zona["base_confronto"].startswith("in zona")
 
 
+class TestPaginazione:
+    """Senza più pagine, in città grandi il vicinato non trova mai comparabili."""
+
+    def _finta_pagina(self, ids):
+        return [{"realEstate": {"id": i, "price": {"value": 100_000},
+                                "properties": [{"surface": "80 m²"}]}} for i in ids]
+
+    def test_unisce_le_pagine(self, monkeypatch):
+        pagine = {1: self._finta_pagina([1, 2]), 2: self._finta_pagina([3, 4])}
+        monkeypatch.setattr(me, "_scarica_pagina", lambda s, p, t: pagine.get(p, []))
+        monkeypatch.setattr(me.time, "sleep", lambda *_: None)
+        assert len(me.scarica_annunci("genova", pagine=3)) == 4
+
+    def test_si_ferma_su_pagina_vuota(self, monkeypatch):
+        chiamate = []
+
+        def finta(slug, pagina, timeout):
+            chiamate.append(pagina)
+            return self._finta_pagina([pagina]) if pagina == 1 else []
+
+        monkeypatch.setattr(me, "_scarica_pagina", finta)
+        monkeypatch.setattr(me.time, "sleep", lambda *_: None)
+        me.scarica_annunci("comunepiccolo", pagine=4)
+        assert chiamate == [1, 2]          # non insiste dopo il vuoto
+
+    def test_scarta_i_duplicati_e_si_ferma(self, monkeypatch):
+        """Se il sito ripete la stessa pagina non va contata due volte."""
+        monkeypatch.setattr(me, "_scarica_pagina",
+                            lambda s, p, t: self._finta_pagina([1, 2]))
+        monkeypatch.setattr(me.time, "sleep", lambda *_: None)
+        assert len(me.scarica_annunci("genova", pagine=4)) == 2
+
+
 class TestDistanzaKm:
     def test_distanza_nota(self):
         # Albaro -> Certosa, circa 6-7 km

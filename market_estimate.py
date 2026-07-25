@@ -47,6 +47,9 @@ MIN_COMPARABILI = 5
 # coordinate si guarda prima chi gli sta davvero vicino.
 RAGGIO_VICINATO_KM = 2.0
 DELAY_TRA_RICHIESTE = 1.5
+# Pagine di annunci da scaricare per comune (25 per pagina): in una città
+# grande la sola prima pagina non basta a trovare comparabili vicini al lotto.
+PAGINE_DA_SCARICARE = 4
 
 # Confrontare un immobile da ristrutturare con annunci di ristrutturati gonfia
 # la stima anche del doppio: lo stato di conservazione pesa quanto la zona.
@@ -113,26 +116,50 @@ def _superficie(raw) -> Optional[float]:
     return float(m.group(1)) if m else None
 
 
-def scarica_annunci(comune: str, timeout: int = 25) -> list[dict]:
-    """
-    Annunci di vendita del comune, normalizzati a
-    {prezzo, superficie, tipologia, citta}. Lista vuota se la pagina non è
-    raggiungibile: la stima è un di più, non deve far fallire il run.
-    """
-    slug = comune_to_slug(comune)
-    if not slug:
-        return []
+def _scarica_pagina(slug: str, pagina: int, timeout: int) -> list:
+    # `pag` da solo viene rifiutato con 403: va accompagnato da `criterio`.
+    url = BASE_URL.format(comune=slug) + "?criterio=rilevanza"
+    if pagina > 1:
+        url += f"&pag={pagina}"
     try:
-        r = creq.get(BASE_URL.format(comune=slug), impersonate=_IMPERSONATE,
-                     headers=_HEADERS, timeout=timeout)
+        r = creq.get(url, impersonate=_IMPERSONATE, headers=_HEADERS, timeout=timeout)
         if r.status_code != 200:
             return []
         m = _NEXT_DATA_RE.search(r.text)
         if not m:
             return []
-        risultati = _trova_risultati(json.loads(m.group(1))) or []
+        return _trova_risultati(json.loads(m.group(1))) or []
     except Exception:
         return []
+
+
+def scarica_annunci(comune: str, timeout: int = 25,
+                    pagine: int = PAGINE_DA_SCARICARE) -> list[dict]:
+    """
+    Annunci di vendita del comune, normalizzati. Lista vuota se la pagina non
+    è raggiungibile: la stima è un di più, non deve far fallire il run.
+
+    Si scaricano più pagine perché in una città grande i 25 annunci della
+    prima non bastano a trovarne abbastanza vicini al lotto, e il confronto
+    per vicinato — quello che serve proprio lì — non scatterebbe mai.
+    """
+    slug = comune_to_slug(comune)
+    if not slug:
+        return []
+
+    risultati, visti = [], set()
+    for pagina in range(1, max(1, pagine) + 1):
+        blocco = _scarica_pagina(slug, pagina, timeout)
+        if not blocco:
+            break                      # pagina vuota: il comune è finito
+        nuovi = [r for r in blocco
+                 if (r.get("realEstate") or r).get("id") not in visti]
+        if not nuovi:
+            break                      # pagina ripetuta: niente altro da prendere
+        visti.update((r.get("realEstate") or r).get("id") for r in nuovi)
+        risultati.extend(nuovi)
+        if pagina < pagine:
+            time.sleep(DELAY_TRA_RICHIESTE)
 
     annunci = []
     for item in risultati:
