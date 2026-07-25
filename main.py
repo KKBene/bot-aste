@@ -39,6 +39,7 @@ else:
 from pdf_analyzer import PDFAnalyzer
 from scorer import calcola_score
 from market_estimate import stima_lotti
+from geocoding import geocodifica
 from notifier import send_start, send_digest, send_error, send_document, send_message, aste_notificabili
 from pdf_report import genera_report_lombardia, genera_report_vacanza, prepara_novita
 
@@ -257,6 +258,21 @@ def main():
             # conservativa e datata, quindi da sola sottostima il margine.
             stime_mercato = {}
             if not SKIP_MERCATO:
+                # Senza coordinate la stima non può restringersi al vicinato e
+                # nelle città grandi confronta quartieri incomparabili: PVP le
+                # dà solo per una parte dei lotti, il resto si geocodifica.
+                da_geocodificare = [a for a in aste_da_scorare
+                                    if a.get("superficie_mq") and not a.get("posizione_lat")]
+                geocodificate = 0
+                for asta in da_geocodificare:
+                    coord = geocodifica(asta.get("indirizzo_immobile"), asta.get("comune"))
+                    if coord:
+                        asta["posizione_lat"], asta["posizione_lng"] = coord
+                        db.aggiorna_coordinate(asta["codice"], *coord)
+                        geocodificate += 1
+                if geocodificate:
+                    print(f"  📍 Coordinate ricavate per geocoding: {geocodificate}")
+
                 try:
                     stime_mercato = stima_lotti(
                         [a for a in aste_da_scorare if a.get("superficie_mq")],
