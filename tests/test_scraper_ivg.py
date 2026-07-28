@@ -95,6 +95,54 @@ class TestPossibileDuplicato:
         assert ivg.possibile_duplicato(DOC, []) is False
 
 
+class TestChiaveRuotata:
+    """Il sito ruota la search-key: senza rinnovo lo scraper resta muto (401)."""
+
+    class _Risposta:
+        def __init__(self, status, hits=None):
+            self.status_code = status
+            self._hits = hits or []
+        def json(self):
+            return {"hits": [{"document": d} for d in self._hits]}
+
+    def test_rinnova_la_chiave_e_ritenta(self, monkeypatch):
+        monkeypatch.setattr(ivg, "_chiave_corrente", ["vecchia"])
+        chiamate = []
+
+        def finta_get(url, headers=None, params=None, timeout=None):
+            chiamate.append((headers or {}).get("X-TYPESENSE-API-KEY"))
+            return self._Risposta(401 if headers.get("X-TYPESENSE-API-KEY") == "vecchia" else 200)
+
+        monkeypatch.setattr(ivg.requests, "get", finta_get)
+        monkeypatch.setattr(ivg, "_leggi_chiave_dal_sito", lambda: "nuova")
+        r = ivg._cerca_typesense({"q": "*"})
+        assert r.status_code == 200
+        assert chiamate == ["vecchia", "nuova"]
+        assert ivg._chiave_corrente[0] == "nuova"
+
+    def test_non_cicla_se_la_chiave_non_cambia(self, monkeypatch):
+        monkeypatch.setattr(ivg, "_chiave_corrente", ["vecchia"])
+        chiamate = []
+
+        def finta_get(url, headers=None, params=None, timeout=None):
+            chiamate.append(1)
+            return self._Risposta(401)
+
+        monkeypatch.setattr(ivg.requests, "get", finta_get)
+        monkeypatch.setattr(ivg, "_leggi_chiave_dal_sito", lambda: "vecchia")
+        assert ivg._cerca_typesense({"q": "*"}).status_code == 401
+        assert len(chiamate) == 1          # inutile ritentare con la stessa
+
+    def test_nessun_rinnovo_se_la_risposta_e_buona(self, monkeypatch):
+        monkeypatch.setattr(ivg, "_chiave_corrente", ["buona"])
+        monkeypatch.setattr(ivg.requests, "get",
+                            lambda *a, **k: self._Risposta(200))
+        def non_chiamare():
+            raise AssertionError("non deve rileggere la chiave")
+        monkeypatch.setattr(ivg, "_leggi_chiave_dal_sito", non_chiamare)
+        assert ivg._cerca_typesense({"q": "*"}).status_code == 200
+
+
 class TestQualitaMetadati:
     """La classificazione IVG è meno affidabile di PVP: serve un controllo sul testo."""
 

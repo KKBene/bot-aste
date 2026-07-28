@@ -30,17 +30,57 @@ import requests
 # stesso espone nel payload della pagina (search-only, sola lettura): se
 # cambia, si rilegge da https://www.ivgvarese.it/ricerca/immobili cercando
 # `tskey`. Sovrascrivibile da env senza toccare il codice.
+_HEADERS_HTML = {"User-Agent": "Mozilla/5.0", "Accept-Language": "it-IT,it;q=0.9"}
+
 TYPESENSE_HOST = "https://typesense.astagiudiziaria.com"
 TYPESENSE_COLLECTION = os.getenv("IVG_COLLECTION", "astagiudiziaria-prod-v3")
-TYPESENSE_KEY = os.getenv("IVG_TYPESENSE_KEY", "cl2QJ5IG34nsYxESwwNIUlFsDlc4CA5n")
+# Ultima chiave nota: fa da punto di partenza, ma il sito la ruota (successo:
+# tutte le query hanno iniziato a dare 401 nel giro di un'ora). Quella vera si
+# rilegge dalla pagina di ricerca, che la pubblica nel proprio payload.
+_KEY_FALLBACK = os.getenv("IVG_TYPESENSE_KEY", "0uDldTEPDPuvGkN3Suvj1qVI9s75GEGm")
 URL_RICERCA = f"{TYPESENSE_HOST}/collections/{TYPESENSE_COLLECTION}/documents/search"
+PAGINA_CHIAVE = "https://www.ivgvarese.it/ricerca/immobili"
+_RE_TSKEY = re.compile(r'tskey\s*:\s*"([A-Za-z0-9]{20,})"')
+
+# chiave in uso, aggiornata a runtime quando quella corrente scade
+_chiave_corrente = [_KEY_FALLBACK]
+
+
+def _leggi_chiave_dal_sito() -> Optional[str]:
+    """Rilegge la search-key pubblica dal payload della pagina di ricerca."""
+    try:
+        r = requests.get(PAGINA_CHIAVE, headers=_HEADERS_HTML, timeout=30)
+        if r.status_code != 200:
+            return None
+        m = _RE_TSKEY.search(r.text)
+        return m.group(1) if m else None
+    except Exception:
+        return None
+
+
+def _cerca_typesense(params: dict, timeout: int = 30):
+    """
+    Interroga l'indice, rinnovando la chiave se il sito l'ha ruotata. Senza
+    questo lo scraper resterebbe muto (401 su ogni chiamata) fino a un
+    intervento manuale.
+    """
+    for tentativo in (1, 2):
+        r = requests.get(URL_RICERCA,
+                         headers={"X-TYPESENSE-API-KEY": _chiave_corrente[0],
+                                  "User-Agent": "Mozilla/5.0"},
+                         params=params, timeout=timeout)
+        if r.status_code != 401 or tentativo == 2:
+            return r
+        nuova = _leggi_chiave_dal_sito()
+        if not nuova or nuova == _chiave_corrente[0]:
+            return r
+        _chiave_corrente[0] = nuova
+    return r
+
 
 # Dominio buono per TUTTI gli IVG: i domini dei singoli istituti
 # (ivgvarese.it, ...) rispondono 404 sugli annunci degli altri.
 HOST_DETTAGLIO = "https://www.astagiudiziaria.com"
-
-_HEADERS = {"X-TYPESENSE-API-KEY": TYPESENSE_KEY, "User-Agent": "Mozilla/5.0"}
-_HEADERS_HTML = {"User-Agent": "Mozilla/5.0", "Accept-Language": "it-IT,it;q=0.9"}
 
 # Categorie residenziali, coerenti col filtro applicato su PVP.
 CATEGORIE_RESIDENZIALE = {"IMMOBILE RESIDENZIALE"}
@@ -53,6 +93,22 @@ _TITOLO_NON_RESIDENZIALE = re.compile(
     r"\b(deposito|capannone|commercial|industrial|negozio|ufficio|opificio|"
     r"laboratorio|magazzino|terreno|box auto|posto auto|autorimessa|"
     r"area edificabile|agricol)\w*", re.I)
+
+
+DELAY_TRA_CHIAMATE = 0.4
+MAX_PER_COMUNE = 50
+
+
+def _norm(s: Optional[str]) -> str:
+    if not s:
+        return ""
+    s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9 ]+", " ", s.lower()).strip()
+
+
+def slug_to_citta(slug: str) -> str:
+    """'busto-arsizio' -> 'BUSTO ARSIZIO' (nell'indice le città sono maiuscole)."""
+    return slug.replace("-", " ").upper()
 
 
 def titolo_non_residenziale(doc: dict) -> bool:
@@ -79,20 +135,6 @@ def comune_incoerente(doc: dict) -> bool:
     if not dichiarato:
         return False
     return dichiarato not in citta and citta not in dichiarato
-DELAY_TRA_CHIAMATE = 0.4
-MAX_PER_COMUNE = 50
-
-
-def _norm(s: Optional[str]) -> str:
-    if not s:
-        return ""
-    s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode()
-    return re.sub(r"[^a-z0-9 ]+", " ", s.lower()).strip()
-
-
-def slug_to_citta(slug: str) -> str:
-    """'busto-arsizio' -> 'BUSTO ARSIZIO' (nell'indice le città sono maiuscole)."""
-    return slug.replace("-", " ").upper()
 
 
 def cerca_comune(slug: str, categorie: Optional[set] = None) -> list[dict]:
@@ -106,9 +148,7 @@ def cerca_comune(slug: str, categorie: Optional[set] = None) -> list[dict]:
     filtro = (f"genre:IMMOBILI && status:`In vendita` && price:>0 "
               f"&& city:=`{citta}`")
     try:
-        r = requests.get(URL_RICERCA, headers=_HEADERS,
-                         params={"q": "*", "per_page": MAX_PER_COMUNE, "filter_by": filtro},
-                         timeout=30)
+        r = _cerca_typesense({"q": "*", "per_page": MAX_PER_COMUNE, "filter_by": filtro})
         if r.status_code != 200:
             return []
         hits = r.json().get("hits", [])

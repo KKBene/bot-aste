@@ -338,10 +338,22 @@ def _is_frazionata(quota: str) -> bool:
     return False
 
 
-def _termine_scaduto(asta: dict) -> bool:
-    """True se il termine offerte è già passato (asta non più giocabile)."""
-    g = giorni_rimanenti(asta.get("termine_offerte"))
-    return g is not None and g < 0
+def _termine_scaduto(asta: dict, adesso: Optional[datetime] = None) -> bool:
+    """
+    True se il termine offerte è già passato (asta non più giocabile).
+
+    Il confronto è sull'istante, non sul giorno: i termini PVP portano l'ora
+    ("28/07/2026 12:00") e contando solo i giorni un'asta chiusa stamattina
+    resterebbe nel report fino a mezzanotte, marcata "OGGI!".
+    Quando l'ora non è indicata il termine vale fino a fine giornata.
+    """
+    testo = asta.get("termine_offerte")
+    scadenza = parse_data_it(testo)
+    if scadenza is None:
+        return False
+    if not re.search(r"\d{1,2}:\d{2}", str(testo)):
+        scadenza = scadenza.replace(hour=23, minute=59, second=59)
+    return scadenza < (adesso or datetime.now())
 
 
 def aste_notificabili(aste: list) -> list:

@@ -316,6 +316,20 @@ class TestTiming:
         """Senza termine non possiamo dire che è scaduto → non filtrare."""
         assert _termine_scaduto({"codice": "X"}) is False
 
+    def test_scaduto_stamattina_non_e_piu_giocabile(self):
+        """Contando solo i giorni restava nel report fino a mezzanotte, come 'OGGI!'."""
+        asta = {"termine_offerte": "28/07/2026 12:00"}
+        assert _termine_scaduto(asta, datetime(2026, 7, 28, 18, 0)) is True
+
+    def test_stesso_giorno_ma_ora_non_ancora_passata(self):
+        asta = {"termine_offerte": "28/07/2026 12:00"}
+        assert _termine_scaduto(asta, datetime(2026, 7, 28, 9, 0)) is False
+
+    def test_senza_orario_vale_fino_a_fine_giornata(self):
+        asta = {"termine_offerte": "28/07/2026"}
+        assert _termine_scaduto(asta, datetime(2026, 7, 28, 18, 0)) is False
+        assert _termine_scaduto(asta, datetime(2026, 7, 29, 0, 1)) is True
+
 
 class TestDigestFiltraScaduti:
     @patch("notifier.requests.post")
