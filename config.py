@@ -121,6 +121,11 @@ COMUNI_PER_LOCALITA = {
         "mozzate", "gallarate", "rovello-porro", "venegono-inferiore",
         "venegono-superiore", "castellanza", "busto-arsizio", "carbonate",
         "locate-varesino", "gerenzano", "turate", "rovellasca",
+        # cintura che confina con i comuni sopra: restavano scoperti pur
+        # essendo dentro la stessa zona (un'asta a Fagnano Olona, tra Busto
+        # Arsizio e Castellanza, non compariva nel report)
+        "fagnano-olona", "solbiate-olona", "olgiate-olona", "marnate",
+        "gorla-maggiore", "gorla-minore", "cairate", "lonate-ceppino",
     ],
 
     # Montagna — Alpi, principali località sciistiche
