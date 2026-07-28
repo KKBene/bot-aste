@@ -47,9 +47,13 @@ MIN_COMPARABILI = 5
 # coordinate si guarda prima chi gli sta davvero vicino.
 RAGGIO_VICINATO_KM = 2.0
 DELAY_TRA_RICHIESTE = 1.5
-# Pagine di annunci da scaricare per comune (25 per pagina): in una città
-# grande la sola prima pagina non basta a trovare comparabili vicini al lotto.
-PAGINE_DA_SCARICARE = 4
+# Annunci per pagina restituiti dal sito.
+ANNUNCI_PER_PAGINA = 25
+# Si parte da poche pagine e si prosegue solo dove il vicinato resta scoperto
+# (vedi stima_lotti): in una città grande servono più annunci per trovarne
+# abbastanza vicini al lotto, in un paese la prima pagina copre già tutto.
+PAGINE_INIZIALI = 2
+PAGINE_DA_SCARICARE = 8
 
 # Confrontare un immobile da ristrutturare con annunci di ristrutturati gonfia
 # la stima anche del doppio: lo stato di conservazione pesa quanto la zona.
@@ -319,10 +323,32 @@ def stima_da_comparabili(comune: str, superficie_mq: Optional[float],
     return risultato
 
 
+def _coord(lotto: dict) -> Optional[tuple]:
+    lat, lng = lotto.get("posizione_lat"), lotto.get("posizione_lng")
+    return (lat, lng) if lat and lng else None
+
+
+def _stima_gruppo(comune: str, gruppo: list[dict], annunci: list[dict]) -> dict:
+    stime = {}
+    for lotto in gruppo:
+        stima = stima_da_comparabili(comune, lotto.get("superficie_mq"), annunci,
+                                     lotto.get("stato_manutentivo"), _coord(lotto))
+        if stima:
+            stime[lotto["codice"]] = stima
+    return stime
+
+
 def stima_lotti(lotti: list[dict], verbose: bool = True) -> dict:
     """
     Stima una lista di lotti raggruppandoli per comune, così ogni comune viene
     scaricato una volta sola. Ritorna {codice: stima}.
+
+    Le pagine extra si scaricano solo dove servono: in un paese bastano i primi
+    annunci per coprire tutto il territorio, mentre in una città sparpagliati
+    su decine di km² non ne lasciano abbastanza vicino al lotto. Si parte
+    quindi da poche pagine e si prosegue solo se qualche lotto è rimasto senza
+    confronto di vicinato — così le città migliorano senza rallentare i comuni
+    piccoli, che sono la maggioranza.
     """
     per_comune: dict[str, list[dict]] = {}
     for lotto in lotti:
@@ -332,15 +358,21 @@ def stima_lotti(lotti: list[dict], verbose: bool = True) -> dict:
     for comune, gruppo in per_comune.items():
         if not comune:
             continue
-        annunci = scarica_annunci(comune)
+        annunci = scarica_annunci(comune, pagine=PAGINE_INIZIALI)
+        risultato = _stima_gruppo(comune, gruppo, annunci)
+
+        # serve altro mercato solo se qualcuno cerca il vicinato e non lo trova
+        manca_vicinato = any(
+            _coord(l) and not (risultato.get(l["codice"], {})
+                               .get("base_confronto", "")).startswith("in zona")
+            for l in gruppo)
+        pagina_piena = len(annunci) >= PAGINE_INIZIALI * ANNUNCI_PER_PAGINA
+        if manca_vicinato and pagina_piena:
+            annunci = scarica_annunci(comune, pagine=PAGINE_DA_SCARICARE)
+            risultato = _stima_gruppo(comune, gruppo, annunci)
+
         if verbose:
             print(f"  {comune}: {len(annunci)} annunci di mercato")
-        for lotto in gruppo:
-            lat, lng = lotto.get("posizione_lat"), lotto.get("posizione_lng")
-            stima = stima_da_comparabili(
-                comune, lotto.get("superficie_mq"), annunci,
-                lotto.get("stato_manutentivo"), (lat, lng) if lat and lng else None)
-            if stima:
-                stime[lotto["codice"]] = stima
+        stime.update(risultato)
         time.sleep(DELAY_TRA_RICHIESTE)
     return stime

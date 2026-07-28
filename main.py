@@ -311,7 +311,10 @@ def main():
             for asta in aste_da_scorare:
                 try:
                     score, breakdown = calcola_score(asta)
-                    mercato = stime_mercato.get(asta["codice"])
+                    # Lo scoring riscrive il breakdown da zero: senza questo, un
+                    # run con --no-mercato cancellerebbe le stime già calcolate.
+                    mercato = (stime_mercato.get(asta["codice"])
+                               or (asta.get("score_breakdown") or {}).get("mercato"))
                     if mercato:
                         breakdown["mercato"] = mercato
                     db.aggiorna_score(asta["codice"], score, breakdown)

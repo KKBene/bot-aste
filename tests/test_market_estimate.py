@@ -186,6 +186,61 @@ class TestPaginazione:
         assert len(me.scarica_annunci("genova", pagine=4)) == 2
 
 
+class TestStimaLottiLazy:
+    """Le pagine extra si scaricano solo dove il vicinato resta scoperto."""
+
+    def _annunci(self, n, lat=45.0, lng=9.0):
+        return [annuncio(100_000, 100, citta="X", lat=lat, lng=lng) for _ in range(n)]
+
+    def _spia(self, monkeypatch, per_chiamata):
+        chiamate = []
+
+        def finto(comune, timeout=25, pagine=me.PAGINE_DA_SCARICARE):
+            chiamate.append(pagine)
+            return per_chiamata(pagine)
+
+        monkeypatch.setattr(me, "scarica_annunci", finto)
+        monkeypatch.setattr(me.time, "sleep", lambda *_: None)
+        return chiamate
+
+    def test_paese_una_sola_passata(self, monkeypatch):
+        """Poche inserzioni: la prima passata basta, niente pagine extra."""
+        chiamate = self._spia(monkeypatch, lambda pagine: self._annunci(8))
+        lotti = [{"codice": "A", "comune": "X", "superficie_mq": 100,
+                  "posizione_lat": 45.0, "posizione_lng": 9.0}]
+        me.stima_lotti(lotti, verbose=False)
+        assert chiamate == [me.PAGINE_INIZIALI]
+
+    def test_citta_scarica_altre_pagine(self, monkeypatch):
+        """Prima passata piena e lotto lontano da tutto: si insiste."""
+        def per_chiamata(pagine):
+            # annunci tutti lontani dal lotto -> nessun confronto "in zona"
+            return self._annunci(pagine * me.ANNUNCI_PER_PAGINA, lat=46.5, lng=11.0)
+
+        chiamate = self._spia(monkeypatch, per_chiamata)
+        lotti = [{"codice": "A", "comune": "X", "superficie_mq": 100,
+                  "posizione_lat": 45.0, "posizione_lng": 9.0}]
+        me.stima_lotti(lotti, verbose=False)
+        assert chiamate == [me.PAGINE_INIZIALI, me.PAGINE_DA_SCARICARE]
+
+    def test_niente_pagine_extra_se_il_vicinato_e_gia_coperto(self, monkeypatch):
+        chiamate = self._spia(monkeypatch,
+                              lambda pagine: self._annunci(pagine * me.ANNUNCI_PER_PAGINA))
+        lotti = [{"codice": "A", "comune": "X", "superficie_mq": 100,
+                  "posizione_lat": 45.0, "posizione_lng": 9.0}]
+        stime = me.stima_lotti(lotti, verbose=False)
+        assert chiamate == [me.PAGINE_INIZIALI]
+        assert stime["A"]["base_confronto"].startswith("in zona")
+
+    def test_lotto_senza_coordinate_non_scatena_pagine_extra(self, monkeypatch):
+        """Senza coordinate il vicinato non è applicabile: inutile insistere."""
+        chiamate = self._spia(monkeypatch,
+                              lambda pagine: self._annunci(pagine * me.ANNUNCI_PER_PAGINA))
+        lotti = [{"codice": "A", "comune": "X", "superficie_mq": 100}]
+        me.stima_lotti(lotti, verbose=False)
+        assert chiamate == [me.PAGINE_INIZIALI]
+
+
 class TestDistanzaKm:
     def test_distanza_nota(self):
         # Albaro -> Certosa, circa 6-7 km
